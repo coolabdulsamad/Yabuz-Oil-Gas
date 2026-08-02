@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { eq, or } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { createRouter } from "../middleware";
 import { authedProcedure } from "../trpc";
 import { getDb } from "../queries/connection";
@@ -10,14 +10,18 @@ import { logAudit, requestMeta } from "../services/audit.service";
 /**
  * YABUZ OIL & GAS — application settings router
  * Key-value store grouped by area. Each group is gated by its own
- * permission: BUSINESS/INTEGRATIONS → settings.business,
- * SYSTEM → settings.system (Super Admin only).
- * (Workflow chains live in approval_flows and arrive with Step 8.)
+ * permission: BUSINESS/INVENTORY/INTEGRATIONS/CHAT/NOTIFICATIONS →
+ * settings.business, SYSTEM → settings.system (Super Admin only).
+ * publicConfig exposes the safe, non-secret toggles every staff member
+ * needs (chat switches, notification switches) for UI gating.
  */
 
 const GROUP_PERMISSION: Record<string, string> = {
   BUSINESS: "settings.business",
+  INVENTORY: "settings.business",
   INTEGRATIONS: "settings.business",
+  CHAT: "settings.business",
+  NOTIFICATIONS: "settings.business",
   SYSTEM: "settings.system",
 };
 
@@ -56,12 +60,44 @@ export const settingsRouter = createRouter({
     const rows = await db
       .select()
       .from(settings)
-      .where(or(eq(settings.key, "cloudinary.cloud_name"), eq(settings.key, "cloudinary.upload_preset")));
+      .where(
+        or(
+          eq(settings.key, "cloudinary.cloud_name"),
+          eq(settings.key, "cloudinary.upload_preset"),
+          eq(settings.key, "cloudinary.folder"),
+        ),
+      );
     const map: Record<string, string> = {};
     for (const r of rows) map[r.key] = r.value ? String(JSON.parse(r.value)) : "";
     const cloudName = map["cloudinary.cloud_name"] ?? "";
     const uploadPreset = map["cloudinary.upload_preset"] ?? "";
-    return { cloudName, uploadPreset, configured: !!(cloudName && uploadPreset) };
+    const folder = map["cloudinary.folder"] ?? "";
+    return { cloudName, uploadPreset, folder, configured: !!(cloudName && uploadPreset) };
+  }),
+
+  /** Safe feature toggles every staff UI needs (no secrets). */
+  publicConfig: authedProcedure.query(async () => {
+    const db = getDb();
+    const wanted = [
+      "chat.enabled",
+      "chat.allow_group_creation",
+      "chat.allow_message_delete",
+      "notifications.enabled",
+      "notifications.sound",
+      "ai.enabled",
+    ];
+    const rows = await db.select().from(settings).where(inArray(settings.key, wanted));
+    const map: Record<string, unknown> = {};
+    for (const r of rows) map[r.key] = r.value ? JSON.parse(r.value) : null;
+    const bool = (key: string, fallback: boolean) => (typeof map[key] === "boolean" ? (map[key] as boolean) : fallback);
+    return {
+      chatEnabled: bool("chat.enabled", true),
+      allowGroupCreation: bool("chat.allow_group_creation", true),
+      allowMessageDelete: bool("chat.allow_message_delete", true),
+      notificationsEnabled: bool("notifications.enabled", true),
+      notificationsSound: bool("notifications.sound", true),
+      aiEnabled: bool("ai.enabled", true),
+    };
   }),
 
   /** Update a batch of settings. Every key is checked against its group's permission. */

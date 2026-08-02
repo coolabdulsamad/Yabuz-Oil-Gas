@@ -7,6 +7,7 @@ import { getDb } from "../queries/connection";
 import { categories, productImages, products, settings, suppliers } from "@db/schema";
 import { PACK_TYPES } from "@contracts/constants";
 import { logAudit, requestMeta } from "../services/audit.service";
+import { getSettingNumber } from "../services/settings.service";
 
 /**
  * YABUZ OIL & GAS — products & categories router
@@ -157,6 +158,10 @@ export const productsRouter = createRouter({
 
       // Temporary SKU (unique), replaced with the category-based one after insert.
       const tempSku = `TMP-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      // Settings → Inventory: fall back to the company-wide default reorder level
+      // when the creator left it at 0.
+      const defaultReorder = await getSettingNumber(db, "inventory.low_stock_default", 0);
+      const reorderLevel = input.reorderLevel > 0 ? input.reorderLevel : defaultReorder;
       const [{ id }] = await db
         .insert(products)
         .values({
@@ -176,7 +181,7 @@ export const productsRouter = createRouter({
           sellCartonPrice: input.sellCartonPrice,
           sellUnitPrice: input.sellUnitPrice,
           allowUnitSales: input.allowUnitSales,
-          reorderLevel: input.reorderLevel,
+          reorderLevel,
           storeLocation: input.storeLocation || null,
           createdBy: ctx.user.id,
           updatedBy: ctx.user.id,
@@ -402,13 +407,18 @@ export const productsRouter = createRouter({
   uploadConfig: authedProcedure.query(async () => {
     const db = getDb();
     const rows = await db.select().from(settings).where(
-      or(eq(settings.key, "cloudinary.cloud_name"), eq(settings.key, "cloudinary.upload_preset")),
+      or(
+        eq(settings.key, "cloudinary.cloud_name"),
+        eq(settings.key, "cloudinary.upload_preset"),
+        eq(settings.key, "cloudinary.folder"),
+      ),
     );
     const map: Record<string, string> = {};
     for (const r of rows) map[r.key] = r.value ? String(JSON.parse(r.value)) : "";
     const cloudName = map["cloudinary.cloud_name"] ?? "";
     const uploadPreset = map["cloudinary.upload_preset"] ?? "";
-    return { cloudName, uploadPreset, configured: !!(cloudName && uploadPreset) };
+    const folder = map["cloudinary.folder"] ?? "";
+    return { cloudName, uploadPreset, folder, configured: !!(cloudName && uploadPreset) };
   }),
 
   addImage: permissionProcedure("products.edit")
