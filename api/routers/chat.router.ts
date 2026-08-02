@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { and, asc, desc, eq, gt, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, like, ne, or, sql } from "drizzle-orm";
 import { createRouter } from "../middleware";
 import { permissionProcedure } from "../trpc";
 import { getDb } from "../queries/connection";
@@ -18,6 +18,8 @@ import {
 } from "@db/schema";
 import { MESSAGE_REFERENCE_TYPES } from "@contracts/constants";
 import { logAudit, requestMeta } from "../services/audit.service";
+import { getSettingBool } from "../services/settings.service";
+import { notifyUsers } from "../services/notifications.service";
 
 /**
  * YABUZ OIL & GAS — team chat router
@@ -26,12 +28,24 @@ import { logAudit, requestMeta } from "../services/audit.service";
  * deep-link into the app. A default "Yabuz Team" group always exists and
  * automatically includes every active staff member.
  *
+ * Every send drops a CHAT notification in the other participants' bells.
+ * Feature switches (chat.enabled, chat.allow_group_creation,
+ * chat.allow_message_delete) come from Settings → Team Chat.
+ *
  * Individual message sends are intentionally NOT audit-logged (chat volume
  * would swamp the trail); structural events (group creation, message
  * deletion) are.
  */
 
 const TEAM_GROUP_NAME = "Yabuz Team";
+
+/** Throw when an admin has switched team chat off globally. */
+async function requireChatEnabled(db: ReturnType<typeof getDb>) {
+  const enabled = await getSettingBool(db, "chat.enabled", true);
+  if (!enabled) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Team chat is currently disabled by an administrator." });
+  }
+}
 
 /** Make sure the all-staff group exists and contains every ACTIVE user. */
 async function ensureTeamGroup(db: ReturnType<typeof getDb>) {
@@ -236,6 +250,7 @@ export const chatRouter = createRouter({
     .input(z.object({ userId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
+      await requireChatEnabled(db);
       if (input.userId === ctx.user.id) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "You can't start a chat with yourself." });
       }
@@ -270,6 +285,11 @@ export const chatRouter = createRouter({
     .input(z.object({ name: z.string().min(2).max(160), memberIds: z.array(z.number()).min(1) }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
+      await requireChatEnabled(db);
+      const allowGroups = await getSettingBool(db, "chat.allow_group_creation", true);
+      if (!allowGroups && !ctx.permissions.has("users.manage")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Group creation is restricted to administrators right now." });
+      }
       const [{ id }] = await db
         .insert(chatConversations)
         .values({ type: "GROUP", name: input.name.trim(), createdBy: ctx.user.id })
@@ -344,6 +364,7 @@ export const chatRouter = createRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
+      await requireChatEnabled(db);
       await requireMembership(db, input.conversationId, ctx.user.id);
 
       const body = input.body?.trim() ?? "";
@@ -377,6 +398,24 @@ export const chatRouter = createRouter({
         .set({ lastReadMessageId: id })
         .where(and(eq(chatParticipants.conversationId, input.conversationId), eq(chatParticipants.userId, ctx.user.id)));
 
+      // Bell: every other participant gets a CHAT notification.
+      const participants = await db
+        .select({ userId: chatParticipants.userId })
+        .from(chatParticipants)
+        .where(eq(chatParticipants.conversationId, input.conversationId));
+      const others = participants.map((p) => p.userId).filter((uid) => uid !== ctx.user.id);
+      if (others.length > 0) {
+        const preview = body
+          ? body.length > 120 ? `${body.slice(0, 120)}…` : body
+          : `Shared a ${(input.referenceType ?? "reference").toLowerCase()}${referenceLabel ? `: ${referenceLabel}` : ""}`;
+        await notifyUsers(db, others, {
+          type: "CHAT",
+          title: `New message from ${ctx.user.fullName}`,
+          body: preview,
+          link: `/chat?c=${input.conversationId}`,
+        });
+      }
+
       return { messageId: id, referenceLabel };
     }),
 
@@ -389,6 +428,10 @@ export const chatRouter = createRouter({
       )[0];
       if (!msg || msg.deletedAt) throw new TRPCError({ code: "NOT_FOUND", message: "Message not found." });
       const canModerate = ctx.permissions.has("users.manage");
+      const allowDelete = await getSettingBool(db, "chat.allow_message_delete", true);
+      if (!allowDelete && !canModerate) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Message deletion is disabled by an administrator." });
+      }
       if (msg.senderId !== ctx.user.id && !canModerate) {
         throw new TRPCError({ code: "FORBIDDEN", message: "You can only delete your own messages." });
       }

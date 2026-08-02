@@ -15,6 +15,7 @@ import type { getDb } from "../queries/connection";
 import { applyMovement } from "./inventory.service";
 import { applyCustomerTx } from "./customers.service";
 import { confirmPaymentEffects } from "./payments.service";
+import { notifyRoles, notifyUsers } from "./notifications.service";
 
 /**
  * YABUZ OIL & GAS — Approval workflow engine
@@ -24,10 +25,21 @@ import { confirmPaymentEffects } from "./payments.service";
  * submitApproval() starts a request; actOnRequest() moves it through
  * the chain; on the final approval the engine applies the business
  * side-effects (stock release, credit/debit ledger) atomically.
+ * Every submission, step and resolution drops a notification in the
+ * bell of whoever needs to act (or whoever asked).
  */
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** "SALE_CREATE" → "Sale create" (for notification titles). */
+function humanize(requestType: string) {
+  return requestType
+    .toLowerCase()
+    .split("_")
+    .map((w, i) => (i === 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
 
 /** Ordered roles allowed inside a chain (super admin can already do everything). */
 export const CHAIN_ROLES = ["MANAGER", "ADMIN"] as const;
@@ -79,6 +91,20 @@ export async function submitApproval(tx: Tx, input: SubmitInput) {
       status: i === 0 ? "PENDING" : "WAITING",
     });
   }
+
+  // Bell: everyone who can act on step 1 (plus super admins) hears about it.
+  await notifyRoles(
+    tx,
+    [input.steps[0], "SUPER_ADMIN"],
+    {
+      type: "APPROVAL_REQUEST",
+      title: `Approval needed: ${humanize(input.requestType)}`,
+      body: input.summary,
+      link: "/approvals",
+    },
+    [input.requesterId],
+  );
+
   return requestId;
 }
 
@@ -271,6 +297,15 @@ export async function actOnRequest(db: Db, input: ActInput) {
             .where(eq(expenses.id, request.entityId));
         }
       }
+
+      // Bell: tell the requester their request was rejected.
+      await notifyUsers(tx, [request.requesterId], {
+        type: "APPROVAL_RESULT",
+        title: `Rejected: ${humanize(request.requestType)}`,
+        body: `${request.summary}${input.note ? ` — ${input.note}` : ""}`,
+        link: "/approvals",
+      });
+
       return { status: "REJECTED" as const, request };
     }
 
@@ -289,6 +324,32 @@ export async function actOnRequest(db: Db, input: ActInput) {
         .update(approvalRequests)
         .set({ currentStep: request.currentStep + 1 })
         .where(eq(approvalRequests.id, request.id));
+
+      // Bell: next step's role takes over.
+      const nextRole = (await tx
+        .select({ role: approvalRequestSteps.role })
+        .from(approvalRequestSteps)
+        .where(
+          and(
+            eq(approvalRequestSteps.requestId, request.id),
+            eq(approvalRequestSteps.stepOrder, request.currentStep + 1),
+          ),
+        )
+        .limit(1))[0]?.role;
+      if (nextRole) {
+        await notifyRoles(
+          tx,
+          [nextRole, "SUPER_ADMIN"],
+          {
+            type: "APPROVAL_REQUEST",
+            title: `Approval needed: ${humanize(request.requestType)}`,
+            body: `${request.summary} (step ${request.currentStep + 1} of ${request.totalSteps})`,
+            link: "/approvals",
+          },
+          [request.requesterId],
+        );
+      }
+
       return { status: "PENDING" as const, request };
     }
 
@@ -307,6 +368,14 @@ export async function actOnRequest(db: Db, input: ActInput) {
           .update(expenses)
           .set({ status: "APPROVED", approvedBy: input.reviewerId, approvedAt: new Date() })
           .where(eq(expenses.id, request.entityId));
+      } else if (request.requestType === "CUSTOMER_CREDIT_LIMIT") {
+        const payload = request.payload as { customerId?: number; creditLimit?: number } | null;
+        if (payload?.customerId && typeof payload.creditLimit === "number") {
+          await tx
+            .update(customers)
+            .set({ creditLimit: payload.creditLimit })
+            .where(eq(customers.id, payload.customerId));
+        }
       }
     }
 
@@ -314,6 +383,15 @@ export async function actOnRequest(db: Db, input: ActInput) {
       .update(approvalRequests)
       .set({ status: "APPROVED", resolvedAt: new Date() })
       .where(eq(approvalRequests.id, request.id));
+
+    // Bell: tell the requester their request cleared the whole chain.
+    await notifyUsers(tx, [request.requesterId], {
+      type: "APPROVAL_RESULT",
+      title: `Approved: ${humanize(request.requestType)}`,
+      body: request.summary,
+      link: "/approvals",
+    });
+
     return { status: "APPROVED" as const, request };
   });
 }
