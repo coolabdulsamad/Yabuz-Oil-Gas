@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, or, sql, sum } from "drizzle-orm";
+import { and, desc, eq, gte, lte, or, sql } from "drizzle-orm";
 import { getDb } from "../queries/connection";
 import {
   customers,
@@ -11,7 +11,8 @@ import {
   settings,
   users,
 } from "@db/schema";
-import type { MessageReferenceType, UserRole } from "@contracts/constants";
+import type { MessageReferenceType } from "@contracts/constants";
+import type { UserRole } from "@contracts/roles";
 
 /**
  * YABUZ OIL & GAS — AI assistant brain.
@@ -210,6 +211,13 @@ export async function answerBusinessQuestion(question: string, user: AiUserConte
   const refs: EntityRef[] = [];
   const perms = user.permissions;
   const can = (key: string) => perms.has(key);
+
+  /* ----- small talk (greetings, thanks, farewells, help) ----- */
+  const firstName = user.fullName.split(" ")[0] ?? user.fullName;
+  const smallTalk = smallTalkAnswer(q, firstName, can);
+  if (smallTalk) {
+    return { answer: smallTalk, references: refs, facts: `The user (${user.fullName}) is making small talk, not asking for data. Greet them back warmly and briefly mention what you can do.` };
+  }
 
   /* ----- direct sale lookup by order number ----- */
   const orderMatch = q.match(/so-\d{6,}-\d+/i);
@@ -650,6 +658,37 @@ function deny(what: string, refs: EntityRef[]): AiAnswer {
   };
 }
 
+/**
+ * Friendly replies for chit-chat so the assistant feels alive even without
+ * an LLM key. Returns null when the message isn't small talk.
+ */
+function smallTalkAnswer(q: string, firstName: string, can: (key: string) => boolean): string | null {
+  const hint = can("sales.view")
+    ? `Ask me things like **"sales today"**, **"who owes us?"**, **"stock of Alva 5000"** or **"profit this month"** — I answer straight from the live company data.`
+    : `Ask me about things like **"stock of Alva 5000"** or **"price of Polar Elite 4LTS"** — I answer straight from the live company data.`;
+
+  if (/^(hi+|hello+|hey+|yo|hiya|howdy|good\s?(morning|afternoon|evening|day)|salaam|assalamu\s?alaikum)[\s!.,]*$/.test(q)) {
+    const daypart = new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening";
+    return `Good ${daypart}, ${firstName}! 👋 Great to hear from you.\n\n${hint}`;
+  }
+  if (/^(how are you|how are you doing|how's it going|how far|how you dey)[\s?!.,]*$/.test(q)) {
+    return `Doing well, thanks for asking, ${firstName}! Always ready to dig into the numbers. 😊\n\n${hint}`;
+  }
+  if (/^(thank|thanks|thank you|thx|appreciated?|well done|nice one)[\s!.,]*$/.test(q)) {
+    return `You're very welcome, ${firstName}! 🙏 Anytime — just ask whenever you need a figure or a report.`;
+  }
+  if (/^(bye|goodbye|good\s?night|see you|later|take care)[\s!.,]*$/.test(q)) {
+    return `Take care, ${firstName}! 👋 I'll be right here whenever you need the numbers.`;
+  }
+  if (/^(who are you|what are you|your name|introduce yourself)[\s?!.,]*$/.test(q)) {
+    return `I'm the **Yabuz business assistant** — I sit on top of the company's live data and answer questions about stock, prices, sales, customers, credit, deposits, payments, expenses and profit.\n\n${hint}`;
+  }
+  if (/^(help|what can you do|what do you do|how do you work|guide|menu|options)[\s?!.,]*$/.test(q)) {
+    return `Happy to help, ${firstName}! ${hint}`;
+  }
+  return null;
+}
+
 /* ------------------------------ optional LLM layer ------------------------------ */
 
 interface AiSettings {
@@ -696,6 +735,7 @@ export async function polishWithLlm(
       `You are the built-in business assistant of YABUZ OIL AND GAS LTD, a Nigerian distributor of Polar Petrochemicals lubricants.`,
       `Answer the staff member's question using ONLY the verified facts retrieved from the company database below — never invent figures.`,
       `Keep the reply concise and friendly, format money as ₦ with thousands separators, and use short bullet points where helpful.`,
+      `For greetings, thanks and small talk, respond warmly and naturally (you may use the staff member's name), then briefly offer what you can help with.`,
       `If the facts don't cover the question, say so honestly and suggest what the user can ask instead.`,
       ``,
       `VERIFIED FACTS FROM THE DATABASE:`,
