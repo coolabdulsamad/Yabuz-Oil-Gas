@@ -36,6 +36,7 @@ import {
   APPROVAL_REQUEST_STATUSES,
   APPROVAL_STEP_STATUSES,
   CUSTOMER_STATUSES,
+  CUSTOMER_TYPES,
   CONVERSATION_TYPES,
   MESSAGE_REFERENCE_TYPES,
   ATTACHMENT_TYPES,
@@ -421,10 +422,23 @@ export const customers = mysqlTable(
     id: serial("id").primaryKey(),
     code: varchar("code", { length: 20 }).notNull().unique(), // CUST-0001
     fullName: varchar("full_name", { length: 160 }).notNull(),
+    customerType: mysqlEnum("customer_type", CUSTOMER_TYPES).notNull().default("BUSINESS"),
     businessName: varchar("business_name", { length: 160 }),
+    contactPerson: varchar("contact_person", { length: 160 }),
     phone: varchar("phone", { length: 40 }),
+    altPhone: varchar("alt_phone", { length: 40 }),
     email: varchar("email", { length: 160 }),
+    website: varchar("website", { length: 160 }),
+    /** Tax Identification Number (TIN) — printed on receipts/invoices. */
+    tin: varchar("tin", { length: 60 }),
+    /** CAC registration number for business customers. */
+    rcNumber: varchar("rc_number", { length: 60 }),
     address: text("address"),
+    /** Where goods get delivered, if different from the billing address. */
+    deliveryAddress: text("delivery_address"),
+    city: varchar("city", { length: 100 }),
+    state: varchar("state", { length: 100 }),
+    country: varchar("country", { length: 100 }).default("Nigeria"),
     notes: text("notes"),
     /** Maximum outstanding credit allowed; 0 = must pay in full. */
     creditLimit: decimal("credit_limit", { precision: 14, scale: 2, mode: "number" })
