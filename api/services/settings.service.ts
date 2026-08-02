@@ -26,3 +26,8 @@ export async function getSettingBool(db: Db | Tx, key: string, fallback: boolean
   const v = await getSettingValue(db, key);
   return typeof v === "boolean" ? v : fallback;
 }
+
+export async function getSettingNumber(db: Db | Tx, key: string, fallback: number): Promise<number> {
+  const v = await getSettingValue(db, key);
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}

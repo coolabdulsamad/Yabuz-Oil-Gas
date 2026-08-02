@@ -6,36 +6,18 @@ import { permissionProcedure } from "../trpc";
 import { getDb } from "../queries/connection";
 import { approvalRequests, approvalRequestSteps, customers, payments, sales, users } from "@db/schema";
 import { PAYMENT_METHODS, PAYMENT_STATUSES, PAYMENT_TYPES } from "@contracts/constants";
-import type { ApprovalFlowEntity, ApprovalType } from "@contracts/constants";
 import { logAudit, requestMeta } from "../services/audit.service";
-import { getFlowSteps, submitApproval } from "../services/approvals.service";
-import { confirmPaymentEffects, parsePaymentMode } from "../services/payments.service";
-import type { getDb as getDbType } from "../queries/connection";
+import { parsePaymentMode } from "../services/payments.service";
+import { recordPaymentWithApproval } from "../services/payment-recording.service";
 
 /**
  * YABUZ OIL & GAS — payments router
  * Every payment carries a proof (except cash) and flows through the
  * configurable PAYMENT/DEPOSIT approval chains. Effects (sale settlement,
  * credit reduction, deposit wallets) land ONLY at confirmation.
+ * The recording logic itself lives in payment-recording.service so that
+ * customer-side deposit/refund actions share the exact same path.
  */
-
-type Db = ReturnType<typeof getDbType>;
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-
-/** Which approval flow + request type each payment type rides on. */
-const FLOW_FOR: Record<(typeof PAYMENT_TYPES)[number], { entity: ApprovalFlowEntity; requestType: ApprovalType }> = {
-  SALE_PAYMENT: { entity: "PAYMENT", requestType: "PAYMENT_RECORD" },
-  CREDIT_PAYMENT: { entity: "PAYMENT", requestType: "PAYMENT_RECORD" },
-  ADVANCE_DEPOSIT: { entity: "DEPOSIT", requestType: "DEPOSIT_RECORD" },
-  DEPOSIT_REFUND: { entity: "DEPOSIT", requestType: "DEPOSIT_REFUND" },
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  SALE_PAYMENT: "sale payment",
-  CREDIT_PAYMENT: "credit repayment",
-  ADVANCE_DEPOSIT: "advance deposit",
-  DEPOSIT_REFUND: "deposit refund",
-};
 
 const createInput = z.object({
   paymentType: z.enum(PAYMENT_TYPES),
@@ -48,12 +30,6 @@ const createInput = z.object({
   externalReference: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(2000).optional(),
 });
-
-async function loadCustomerName(tx: Tx, customerId: number | null | undefined) {
-  if (!customerId) return null;
-  const [c] = await tx.select({ fullName: customers.fullName }).from(customers).where(eq(customers.id, customerId)).limit(1);
-  return c?.fullName ?? null;
-}
 
 export const paymentsRouter = createRouter({
   /** Completed sales still carrying a balance — feeds the payment form's sale picker. */
@@ -166,97 +142,9 @@ export const paymentsRouter = createRouter({
     .input(createInput)
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
-      if (input.method === "DEPOSIT_BALANCE") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "To pay from a deposit wallet, create the sale with the deposit settlement mode instead." });
-      }
-      if (input.method !== "CASH" && !input.proofUrl) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Attach a payment proof (receipt / transfer screenshot) — required for non-cash payments." });
-      }
-
-      const result = await db.transaction(async (tx) => {
-        let customerName: string | null = null;
-        let orderNo: string | null = null;
-
-        if (input.paymentType === "SALE_PAYMENT") {
-          if (!input.saleId) throw new TRPCError({ code: "BAD_REQUEST", message: "Pick the sale this payment settles." });
-          const [sale] = await tx.select().from(sales).where(eq(sales.id, input.saleId)).limit(1);
-          if (!sale) throw new TRPCError({ code: "BAD_REQUEST", message: "Sale not found." });
-          if (sale.status !== "COMPLETED") throw new TRPCError({ code: "BAD_REQUEST", message: `Sale ${sale.orderNo} is ${sale.status.toLowerCase()} — only completed sales can receive payments.` });
-          if (sale.balanceDue <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: `Sale ${sale.orderNo} is already fully paid.` });
-          orderNo = sale.orderNo;
-          const customerId = input.customerId ?? sale.customerId ?? null;
-          if (input.amount > sale.balanceDue && !customerId) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "This overpays the sale — overpayments flow into a customer's deposit wallet, so pick a customer account." });
-          }
-          if (sale.customerId && input.customerId && input.customerId !== sale.customerId) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "This sale belongs to a different customer." });
-          }
-          input = { ...input, customerId: customerId ?? undefined };
-          customerName = await loadCustomerName(tx, customerId);
-        } else {
-          if (!input.customerId) throw new TRPCError({ code: "BAD_REQUEST", message: "Pick a customer." });
-          const [cust] = await tx.select().from(customers).where(eq(customers.id, input.customerId)).limit(1);
-          if (!cust) throw new TRPCError({ code: "BAD_REQUEST", message: "Customer not found." });
-          if (cust.status !== "ACTIVE") throw new TRPCError({ code: "BAD_REQUEST", message: `Customer "${cust.fullName}" is ${cust.status.toLowerCase()}.` });
-          if (input.paymentType === "CREDIT_PAYMENT" && cust.creditOutstanding <= 0) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: `${cust.fullName} has no outstanding balance — record an advance deposit instead.` });
-          }
-          if (input.paymentType === "DEPOSIT_REFUND" && input.amount > cust.depositBalance) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: `Refund exceeds the deposit balance (₦${cust.depositBalance.toLocaleString()}).` });
-          }
-          customerName = cust.fullName;
-        }
-
-        const [{ id: paymentId }] = await tx
-          .insert(payments)
-          .values({
-            reference: "PENDING",
-            customerId: input.customerId ?? null,
-            saleId: input.paymentType === "SALE_PAYMENT" ? (input.saleId ?? null) : null,
-            paymentType: input.paymentType,
-            method: input.method,
-            amount: input.amount,
-            proofUrl: input.proofUrl ?? null,
-            proofPublicId: input.proofPublicId ?? null,
-            externalReference: input.externalReference || null,
-            notes: input.notes || null,
-            status: "PENDING_APPROVAL",
-            recordedBy: ctx.user.id,
-          })
-          .$returningId();
-        const reference = `PAY-${String(paymentId).padStart(6, "0")}`;
-        await tx.update(payments).set({ reference }).where(eq(payments.id, paymentId));
-
-        const summary = `${TYPE_LABELS[input.paymentType][0].toUpperCase()}${TYPE_LABELS[input.paymentType].slice(1)} ${reference} — ₦${input.amount.toLocaleString()}${customerName ? ` from ${customerName}` : ""}${orderNo ? ` for ${orderNo}` : ""} (${input.method})`;
-        const flow = FLOW_FOR[input.paymentType];
-        const steps = await getFlowSteps(tx, flow.entity);
-
-        if (steps.length === 0) {
-          await confirmPaymentEffects(tx, paymentId, ctx.user.id);
-          return { paymentId, reference, outcome: "CONFIRMED" as const, summary };
-        }
-
-        const requestId = await submitApproval(tx, {
-          requestType: flow.requestType,
-          entityType: flow.entity,
-          entityId: paymentId,
-          payload: {
-            reference,
-            paymentType: TYPE_LABELS[input.paymentType],
-            method: input.method,
-            amount: input.amount,
-            customer: customerName,
-            sale: orderNo,
-            proofUrl: input.proofUrl ?? null,
-            externalReference: input.externalReference ?? null,
-            notes: input.notes ?? null,
-          },
-          summary,
-          requesterId: ctx.user.id,
-          steps,
-        });
-        return { paymentId, reference, outcome: "PENDING" as const, summary, requestId };
-      });
+      const result = await db.transaction(async (tx) =>
+        recordPaymentWithApproval(tx, input, ctx.user.id),
+      );
 
       await logAudit({
         actorId: ctx.user.id,

@@ -5,9 +5,11 @@ import { createRouter } from "../middleware";
 import { anyPermissionProcedure, permissionProcedure } from "../trpc";
 import { getDb } from "../queries/connection";
 import { customers, customerTransactions, users } from "@db/schema";
-import { CUSTOMER_STATUSES, CUSTOMER_TRANSACTION_TYPES } from "@contracts/constants";
+import { CUSTOMER_STATUSES, CUSTOMER_TRANSACTION_TYPES, CUSTOMER_TYPES, PAYMENT_METHODS } from "@contracts/constants";
 import { logAudit, requestMeta } from "../services/audit.service";
 import { applyCustomerTx } from "../services/customers.service";
+import { getFlowSteps, submitApproval } from "../services/approvals.service";
+import { recordPaymentWithApproval } from "../services/payment-recording.service";
 
 /**
  * YABUZ OIL & GAS — customers, credit & advance deposits router
@@ -15,19 +17,39 @@ import { applyCustomerTx } from "../services/customers.service";
  *   creditOutstanding — what the customer owes Yabuz (credit sales)
  *   depositBalance    — money the customer holds with Yabuz in advance
  * Both balances move ONLY through the customer_transactions ledger.
+ * Deposit/refund actions create a real payment record (method, reference,
+ * proof) and ride the DEPOSIT approval chain — nothing bypasses workflow.
  */
 
 const customerInput = z.object({
   fullName: z.string().min(2, "Customer name is required").max(160),
+  customerType: z.enum(CUSTOMER_TYPES).default("BUSINESS"),
   businessName: z.string().max(160).optional().or(z.literal("")),
+  contactPerson: z.string().max(160).optional().or(z.literal("")),
   phone: z.string().max(40).optional().or(z.literal("")),
+  altPhone: z.string().max(40).optional().or(z.literal("")),
   email: z.string().email("Invalid email").max(160).optional().or(z.literal("")),
+  website: z.string().max(160).optional().or(z.literal("")),
+  tin: z.string().max(60).optional().or(z.literal("")),
+  rcNumber: z.string().max(60).optional().or(z.literal("")),
   address: z.string().max(2000).optional().or(z.literal("")),
+  deliveryAddress: z.string().max(2000).optional().or(z.literal("")),
+  city: z.string().max(100).optional().or(z.literal("")),
+  state: z.string().max(100).optional().or(z.literal("")),
+  country: z.string().max(100).optional().or(z.literal("")),
   notes: z.string().max(2000).optional().or(z.literal("")),
   creditLimit: z.number().min(0),
 });
 
 const LEDGER_READ_KEYS = ["customers.view", "credit.view", "deposits.view"];
+
+/** Method/reference/proof required for any money movement (mirrors payments.create). */
+const moneyDetails = {
+  method: z.enum(PAYMENT_METHODS),
+  externalReference: z.string().trim().max(120).optional(),
+  proofUrl: z.string().url().max(500).optional(),
+  proofPublicId: z.string().max(255).optional(),
+};
 
 export const customersRouter = createRouter({
   /* -------------------------------- DIRECTORY -------------------------------- */
@@ -70,10 +92,20 @@ export const customersRouter = createRouter({
           id: customers.id,
           code: customers.code,
           fullName: customers.fullName,
+          customerType: customers.customerType,
           businessName: customers.businessName,
+          contactPerson: customers.contactPerson,
           phone: customers.phone,
+          altPhone: customers.altPhone,
           email: customers.email,
+          website: customers.website,
+          tin: customers.tin,
+          rcNumber: customers.rcNumber,
           address: customers.address,
+          deliveryAddress: customers.deliveryAddress,
+          city: customers.city,
+          state: customers.state,
+          country: customers.country,
           notes: customers.notes,
           creditLimit: customers.creditLimit,
           creditOutstanding: customers.creditOutstanding,
@@ -111,10 +143,20 @@ export const customersRouter = createRouter({
         .values({
           code: "TMP",
           fullName: input.fullName.trim(),
+          customerType: input.customerType,
           businessName: input.businessName || null,
+          contactPerson: input.contactPerson || null,
           phone: input.phone || null,
+          altPhone: input.altPhone || null,
           email: input.email || null,
+          website: input.website || null,
+          tin: input.tin || null,
+          rcNumber: input.rcNumber || null,
           address: input.address || null,
+          deliveryAddress: input.deliveryAddress || null,
+          city: input.city || null,
+          state: input.state || null,
+          country: input.country || "Nigeria",
           notes: input.notes || null,
           creditLimit: input.creditLimit,
           createdBy: ctx.user.id,
@@ -154,10 +196,20 @@ export const customersRouter = createRouter({
         .update(customers)
         .set({
           fullName: input.data.fullName.trim(),
+          customerType: input.data.customerType,
           businessName: input.data.businessName || null,
+          contactPerson: input.data.contactPerson || null,
           phone: input.data.phone || null,
+          altPhone: input.data.altPhone || null,
           email: input.data.email || null,
+          website: input.data.website || null,
+          tin: input.data.tin || null,
+          rcNumber: input.data.rcNumber || null,
           address: input.data.address || null,
+          deliveryAddress: input.data.deliveryAddress || null,
+          city: input.data.city || null,
+          state: input.data.state || null,
+          country: input.data.country || "Nigeria",
           notes: input.data.notes || null,
           creditLimit: input.data.creditLimit,
         })
@@ -253,7 +305,8 @@ export const customersRouter = createRouter({
     };
   }),
 
-  /** Change a credit limit (credit.manage only — heavily audited). */
+  /** Change a credit limit (credit.manage). Rides the CUSTOMER_CREDIT approval
+   *  chain when one is configured — the new limit lands only at final approval. */
   setCreditLimit: permissionProcedure("credit.manage")
     .input(z.object({ customerId: z.number(), creditLimit: z.number().min(0), reason: z.string().min(3, "Give a reason").max(255) }))
     .mutation(async ({ ctx, input }) => {
@@ -261,6 +314,40 @@ export const customersRouter = createRouter({
       const found = await db.select().from(customers).where(eq(customers.id, input.customerId)).limit(1);
       const existing = found[0];
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Customer not found." });
+
+      const steps = await getFlowSteps(db, "CUSTOMER_CREDIT");
+
+      if (steps.length > 0) {
+        const summary = `Credit limit for "${existing.fullName}": ₦${existing.creditLimit.toLocaleString()} → ₦${input.creditLimit.toLocaleString()} — ${input.reason}`;
+        const requestId = await db.transaction(async (tx) =>
+          submitApproval(tx, {
+            requestType: "CUSTOMER_CREDIT_LIMIT",
+            entityType: "CUSTOMER_CREDIT",
+            entityId: input.customerId,
+            payload: {
+              customerId: input.customerId,
+              customerName: existing.fullName,
+              currentLimit: existing.creditLimit,
+              creditLimit: input.creditLimit,
+              reason: input.reason,
+            },
+            summary,
+            requesterId: ctx.user.id,
+            steps,
+          }),
+        );
+        await logAudit({
+          actorId: ctx.user.id,
+          action: "credit.limit_requested",
+          entityType: "CUSTOMER",
+          entityId: input.customerId,
+          description: `Requested credit-limit change for "${existing.fullName}" from ₦${existing.creditLimit.toLocaleString()} to ₦${input.creditLimit.toLocaleString()} — awaiting approval. Reason: ${input.reason}.`,
+          beforeData: { creditLimit: existing.creditLimit },
+          afterData: { creditLimit: input.creditLimit, reason: input.reason, approvalRequestId: requestId },
+          ...requestMeta(ctx.req),
+        });
+        return { ok: true as const, outcome: "PENDING" as const, requestId };
+      }
 
       await db.update(customers).set({ creditLimit: input.creditLimit }).where(eq(customers.id, input.customerId));
 
@@ -274,7 +361,7 @@ export const customersRouter = createRouter({
         afterData: { creditLimit: input.creditLimit, reason: input.reason },
         ...requestMeta(ctx.req),
       });
-      return { ok: true };
+      return { ok: true as const, outcome: "APPLIED" as const };
     }),
 
   /** Manual correction of what a customer owes (credit.manage, reason mandatory). */
@@ -332,72 +419,94 @@ export const customersRouter = createRouter({
     };
   }),
 
-  /** Record an advance deposit from a customer. */
+  /** Record an advance deposit from a customer — full payment details,
+   *  proof and the DEPOSIT approval chain (same pipeline as payments.create). */
   recordDeposit: permissionProcedure("deposits.record")
     .input(
       z.object({
         customerId: z.number(),
         amount: z.number().positive("Amount must be greater than zero"),
+        ...moneyDetails,
         notes: z.string().max(500).optional().or(z.literal("")),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const result = await db.transaction(async (tx) =>
-        applyCustomerTx(tx, {
-          customerId: input.customerId,
-          transactionType: "DEPOSIT_IN",
-          depositDelta: input.amount,
-          referenceType: "DEPOSIT",
-          notes: input.notes || "Advance deposit received",
-          performedBy: ctx.user.id,
-        }),
+        recordPaymentWithApproval(
+          tx,
+          {
+            paymentType: "ADVANCE_DEPOSIT",
+            customerId: input.customerId,
+            method: input.method,
+            amount: input.amount,
+            proofUrl: input.proofUrl ?? null,
+            proofPublicId: input.proofPublicId ?? null,
+            externalReference: input.externalReference ?? null,
+            notes: input.notes || "Advance deposit received",
+          },
+          ctx.user.id,
+        ),
       );
 
       await logAudit({
         actorId: ctx.user.id,
-        action: "deposit.record",
-        entityType: "CUSTOMER",
-        entityId: input.customerId,
-        description: `Recorded ₦${input.amount.toLocaleString()} advance deposit from "${result.customer.fullName}" — wallet now ₦${result.depositBalanceAfter.toLocaleString()}.`,
-        afterData: { depositDelta: input.amount, depositBalanceAfter: result.depositBalanceAfter },
+        action: result.outcome === "CONFIRMED" ? "deposit.confirmed" : "deposit.recorded",
+        entityType: "PAYMENT",
+        entityId: result.paymentId,
+        description:
+          result.outcome === "CONFIRMED"
+            ? `Confirmed (no approval chain): ${result.summary}`
+            : `Recorded for approval: ${result.summary}`,
+        afterData: { reference: result.reference, paymentType: "ADVANCE_DEPOSIT", method: input.method, amount: input.amount },
         ...requestMeta(ctx.req),
       });
-      return { ok: true, depositBalanceAfter: result.depositBalanceAfter };
+      return { ok: true as const, outcome: result.outcome, reference: result.reference, paymentId: result.paymentId };
     }),
 
-  /** Pay deposit money back out to the customer. */
+  /** Pay deposit money back out to the customer — full payment details,
+   *  proof and the DEPOSIT approval chain. */
   refundDeposit: permissionProcedure("deposits.refund")
     .input(
       z.object({
         customerId: z.number(),
         amount: z.number().positive("Amount must be greater than zero"),
-        reason: z.string().min(3, "Give a reason for this refund").max(255),
+        ...moneyDetails,
+        reason: z.string().min(3, "Give a reason for this refund").max(500),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const result = await db.transaction(async (tx) =>
-        applyCustomerTx(tx, {
-          customerId: input.customerId,
-          transactionType: "DEPOSIT_REFUND",
-          depositDelta: -input.amount,
-          referenceType: "DEPOSIT",
-          notes: input.reason,
-          performedBy: ctx.user.id,
-        }),
+        recordPaymentWithApproval(
+          tx,
+          {
+            paymentType: "DEPOSIT_REFUND",
+            customerId: input.customerId,
+            method: input.method,
+            amount: input.amount,
+            proofUrl: input.proofUrl ?? null,
+            proofPublicId: input.proofPublicId ?? null,
+            externalReference: input.externalReference ?? null,
+            notes: input.reason,
+          },
+          ctx.user.id,
+        ),
       );
 
       await logAudit({
         actorId: ctx.user.id,
-        action: "deposit.refund",
-        entityType: "CUSTOMER",
-        entityId: input.customerId,
-        description: `Refunded ₦${input.amount.toLocaleString()} from "${result.customer.fullName}"'s deposit wallet — ${input.reason}. Wallet now ₦${result.depositBalanceAfter.toLocaleString()}.`,
-        afterData: { depositDelta: -input.amount, depositBalanceAfter: result.depositBalanceAfter },
+        action: result.outcome === "CONFIRMED" ? "deposit.refund_confirmed" : "deposit.refund_recorded",
+        entityType: "PAYMENT",
+        entityId: result.paymentId,
+        description:
+          result.outcome === "CONFIRMED"
+            ? `Confirmed (no approval chain): ${result.summary}`
+            : `Recorded for approval: ${result.summary}`,
+        afterData: { reference: result.reference, paymentType: "DEPOSIT_REFUND", method: input.method, amount: input.amount },
         ...requestMeta(ctx.req),
       });
-      return { ok: true, depositBalanceAfter: result.depositBalanceAfter };
+      return { ok: true as const, outcome: result.outcome, reference: result.reference, paymentId: result.paymentId };
     }),
 
   /** Count of credit/deposit accounts — for the dashboard. */
