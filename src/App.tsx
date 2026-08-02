@@ -23,6 +23,7 @@ import Deposits from "@/pages/Deposits";
 import Sales from "@/pages/Sales";
 import NewSale from "@/pages/NewSale";
 import SaleDetail from "@/pages/SaleDetail";
+import SaleReceipt from "@/pages/SaleReceipt";
 import Approvals from "@/pages/Approvals";
 import Payments from "@/pages/Payments";
 import Expenses from "@/pages/Expenses";
@@ -37,6 +38,8 @@ export default function App() {
     <>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Standalone printable receipt — no app shell */}
+        <Route path="/sales/:id/receipt" element={<SaleReceipt />} />
 
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />

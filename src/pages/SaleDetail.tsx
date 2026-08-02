@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Ban, Loader2, Pause, Pencil, Play, Send } from "lucide-react";
+import { ArrowLeft, Ban, Loader2, Pause, Pencil, Play, Printer, Send } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -133,6 +133,13 @@ export default function SaleDetail() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {sale.status === "COMPLETED" && (
+            <Button asChild variant="outline" className="border-[#F7A026]/50 text-[#22264B] hover:bg-[#F7A026]/10">
+              <Link to={`/sales/${sale.id}/receipt`} target="_blank">
+                <Printer className="mr-1 size-4" /> Receipt
+              </Link>
+            </Button>
+          )}
           {canActDraft && (
             <>
               <Button variant="outline" disabled={busy} onClick={() => navigate(`/sales/${sale.id}/edit`)}>
