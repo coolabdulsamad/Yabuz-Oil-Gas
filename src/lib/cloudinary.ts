@@ -9,11 +9,12 @@ export interface CloudinaryUploadResult {
 
 export async function uploadToCloudinary(
   file: File,
-  config: { cloudName: string; uploadPreset: string },
+  config: { cloudName: string; uploadPreset: string; folder?: string },
 ): Promise<CloudinaryUploadResult> {
   const form = new FormData();
   form.append("file", file);
   form.append("upload_preset", config.uploadPreset);
+  if (config.folder) form.append("folder", config.folder);
 
   const res = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`, {
     method: "POST",

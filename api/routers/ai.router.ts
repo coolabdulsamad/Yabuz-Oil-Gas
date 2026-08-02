@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { createRouter } from "../middleware";
 import { permissionProcedure } from "../trpc";
 import { getDb } from "../queries/connection";

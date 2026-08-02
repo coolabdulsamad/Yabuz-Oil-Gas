@@ -7,6 +7,7 @@ import { getDb } from "../queries/connection";
 import { approvalRequests, approvalRequestSteps, customers, products, saleItems, sales, users } from "@db/schema";
 import { SALE_STATUSES } from "@contracts/constants";
 import { logAudit, requestMeta } from "../services/audit.service";
+import { getSettingBool } from "../services/settings.service";
 import { applyMovement } from "../services/inventory.service";
 import { applyCustomerTx } from "../services/customers.service";
 import { bumpCustomerStats, finalizeSale, getFlowSteps, submitApproval } from "../services/approvals.service";
@@ -154,8 +155,13 @@ async function validatePaymentMode(db: Db, input: z.infer<typeof saleBodyInput>,
     if (!has("sales.sell_on_credit")) {
       throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to sell on credit." });
     }
+    // Settings → Sales & Receipts: allow credit sales to customers with no credit limit?
+    const allowNoLimit = await getSettingBool(db, "sales.allow_credit_without_limit", false);
     if (customer.creditLimit <= 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: `"${customer.fullName}" has no credit allowance — use pay-later or deposit.` });
+      if (!allowNoLimit) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `"${customer.fullName}" has no credit allowance — use pay-later or deposit. (An admin can relax this in Settings → Sales & Receipts.)` });
+      }
+      return customer; // no limit configured and the company allows it — skip headroom check
     }
     const headroom = Number((customer.creditLimit - customer.creditOutstanding).toFixed(2));
     if (grandTotal > headroom) {
