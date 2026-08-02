@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
   AtSign,
   Check,
@@ -16,6 +17,7 @@ import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { RefChipList, type EntityRef } from "@/components/chat/RefChips";
+import { playSound } from "@/lib/sounds";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,13 +41,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
  * exists with every active staff member. Messages can carry an entity
  * reference card (product / sale / customer) via the @-picker.
  */
-
-const ROLE_TINT: Record<string, string> = {
-  SUPER_ADMIN: "bg-purple-100 text-purple-700",
-  ADMIN: "bg-[#22264B] text-white",
-  MANAGER: "bg-[#F7A026]/15 text-[#9a6212]",
-  SALES: "bg-emerald-100 text-emerald-700",
-};
 
 function initials(name: string) {
   return name
@@ -84,10 +79,12 @@ function NewChatDialog({
   open,
   onClose,
   onCreated,
+  allowGroup,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: (conversationId: number) => void;
+  allowGroup?: boolean;
 }) {
   const utils = trpc.useUtils();
   const [tab, setTab] = useState("direct");
@@ -133,9 +130,9 @@ function NewChatDialog({
           <DialogDescription>Message a colleague directly, or create a group.</DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className={`grid w-full ${allowGroup === false ? "grid-cols-1" : "grid-cols-2"}`}>
             <TabsTrigger value="direct">Direct message</TabsTrigger>
-            <TabsTrigger value="group">New group</TabsTrigger>
+            {allowGroup !== false && <TabsTrigger value="group">New group</TabsTrigger>}
           </TabsList>
         </Tabs>
         <div className="relative">
@@ -322,16 +319,31 @@ function EntityPicker({
 export default function TeamChat() {
   const { user } = useAuth({ redirectOnUnauthenticated: true });
   const utils = trpc.useUtils();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeId, setActiveId] = useState<number | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [body, setBody] = useState("");
   const [pendingRef, setPendingRef] = useState<{ type: EntityRef["type"]; id: number; label: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastMarkedRef = useRef(0);
+  const prevLastIdRef = useRef(0);
 
   const conversations = trpc.chat.conversations.useQuery(undefined, {
     refetchInterval: 5000,
   });
+  const publicConfig = trpc.settings.publicConfig.useQuery();
+  const chatEnabled = publicConfig.data?.chatEnabled !== false;
+
+  // Deep link: /chat?c=<conversationId> (e.g. from a notification) opens that conversation.
+  useEffect(() => {
+    const target = Number(searchParams.get("c"));
+    if (target && conversations.data?.some((c) => c.id === target)) {
+      setActiveId(target);
+      lastMarkedRef.current = 0;
+      prevLastIdRef.current = 0;
+      setSearchParams({}, { replace: true });
+    }
+  }, [conversations.data, searchParams, setSearchParams]);
 
   // auto-select the first conversation once loaded (desktop only — mobile lands on the list)
   useEffect(() => {
@@ -360,6 +372,7 @@ export default function TeamChat() {
     onSuccess: async () => {
       setBody("");
       setPendingRef(null);
+      playSound("send");
       await Promise.all([utils.chat.messages.invalidate(), utils.chat.conversations.invalidate()]);
     },
     onError: (e) => toast.error(e.message),
@@ -371,13 +384,18 @@ export default function TeamChat() {
     onError: (e) => toast.error(e.message),
   });
 
-  // scroll to bottom + mark read on new messages
+  // scroll to bottom + mark read on new messages + pop a sound for incoming ones
   const rows = messages.data ?? [];
   const lastId = rows.length > 0 ? rows[rows.length - 1].id : 0;
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+    if (lastId > prevLastIdRef.current && prevLastIdRef.current !== 0 && user) {
+      const incoming = rows.some((m) => m.id > prevLastIdRef.current && m.senderId !== user.id);
+      if (incoming) playSound("receive");
+    }
+    prevLastIdRef.current = lastId;
     if (activeId !== null && lastId > 0 && lastId > lastMarkedRef.current) {
       lastMarkedRef.current = lastId;
       markRead.mutate({ conversationId: activeId, messageId: lastId });
@@ -398,6 +416,19 @@ export default function TeamChat() {
   };
 
   const totalUnread = (conversations.data ?? []).reduce((s, c) => s + c.unread, 0);
+  const canModerate = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "MANAGER";
+  const allowDelete = publicConfig.data?.allowMessageDelete !== false || canModerate;
+  const allowGroupCreation = publicConfig.data?.allowGroupCreation !== false || canModerate;
+
+  if (publicConfig.data && !chatEnabled) {
+    return (
+      <div className="flex h-[calc(100vh-7.5rem)] flex-col items-center justify-center rounded-2xl border border-[#22264B]/10 bg-white text-[#22264B]/40">
+        <MessageSquare className="mb-3 h-12 w-12" />
+        <p className="text-sm font-semibold">Team chat is currently disabled by an administrator.</p>
+        <p className="mt-1 text-xs">It can be turned back on in Settings → Team Chat.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-7.5rem)] gap-4">
@@ -433,6 +464,7 @@ export default function TeamChat() {
               onClick={() => {
                 setActiveId(c.id);
                 lastMarkedRef.current = 0;
+                prevLastIdRef.current = 0;
               }}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                 c.id === activeId ? "bg-[#22264B] text-white" : "hover:bg-[#22264B]/5"
@@ -561,6 +593,7 @@ export default function TeamChat() {
                             {m.referenceType && m.referenceId && m.referenceLabel && (
                               <RefChipList
                                 references={[{ type: m.referenceType, id: m.referenceId, label: m.referenceLabel }]}
+                                onDark={m.mine}
                               />
                             )}
                           </>
@@ -569,8 +602,7 @@ export default function TeamChat() {
                           <span className="text-[9px]">
                             {new Date(m.createdAt).toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" })}
                           </span>
-                          {(m.mine || user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.role === "MANAGER") &&
-                            !m.deleted && (
+                          {(m.mine || canModerate) && allowDelete && !m.deleted && (
                               <button
                                 type="button"
                                 title="Delete message"
@@ -650,6 +682,7 @@ export default function TeamChat() {
         open={newChatOpen}
         onClose={() => setNewChatOpen(false)}
         onCreated={(id) => setActiveId(id)}
+        allowGroup={allowGroupCreation}
       />
     </div>
   );

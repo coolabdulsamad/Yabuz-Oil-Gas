@@ -33,13 +33,16 @@ const REF_STYLE: Record<EntityRef["type"], { icon: LucideIcon; href: (id: number
   EXPENSE: { icon: Receipt, href: () => `/expenses`, tint: "border-red-600/30 bg-red-50 text-red-700" },
 };
 
-export function RefChip({ reference }: { reference: EntityRef }) {
+/** Light-on-dark tint used inside the sender's own (dark navy) bubble. */
+const DARK_TINT = "border-white/35 bg-white/15 text-white hover:bg-white/25";
+
+export function RefChip({ reference, onDark }: { reference: EntityRef; onDark?: boolean }) {
   const style = REF_STYLE[reference.type] ?? REF_STYLE.PRODUCT;
   const Icon = style.icon;
   return (
     <Link
       to={style.href(reference.id)}
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:opacity-75 ${style.tint}`}
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:opacity-75 ${onDark ? DARK_TINT : style.tint}`}
       title={`Open ${reference.type.toLowerCase()}`}
     >
       <Icon className="h-3 w-3 shrink-0" />
@@ -48,7 +51,7 @@ export function RefChip({ reference }: { reference: EntityRef }) {
   );
 }
 
-export function RefChipList({ references }: { references: EntityRef[] }) {
+export function RefChipList({ references, onDark }: { references: EntityRef[]; onDark?: boolean }) {
   if (!references || references.length === 0) return null;
   const seen = new Set<string>();
   const unique = references.filter((r) => {
@@ -60,7 +63,7 @@ export function RefChipList({ references }: { references: EntityRef[] }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {unique.map((r) => (
-        <RefChip key={`${r.type}-${r.id}`} reference={r} />
+        <RefChip key={`${r.type}-${r.id}`} reference={r} onDark={onDark} />
       ))}
     </div>
   );
