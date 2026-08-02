@@ -1,16 +1,37 @@
 import { useMemo, useState } from "react";
-import { Building2, Cloud, Save, Wrench } from "lucide-react";
+import { Link } from "react-router";
+import {
+  Bell,
+  Boxes,
+  Building2,
+  Cloud,
+  Loader2,
+  MessageSquare,
+  Receipt,
+  Save,
+  Sparkles,
+  Volume2,
+  VolumeX,
+  Workflow,
+  Wrench,
+} from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
+import { soundsEnabled, setSoundsEnabled } from "@/lib/sounds";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
- * YABUZ OIL & GAS — application settings.
- * Grouped forms; the server only returns groups the viewer may edit
- * (business/integrations → settings.business, system → Super Admin).
+ * YABUZ OIL & GAS — settings control center.
+ * Tabbed like a proper back office: business identity, receipts, inventory,
+ * Cloudinary, AI, team chat, notifications, workflow and system. The server
+ * only returns the groups the viewer may edit — SYSTEM requires the
+ * settings.system permission (Super Admin), the rest need settings.business.
+ * "My preferences" is per-device (this browser only).
  */
 
 type SettingRow = {
@@ -21,104 +42,172 @@ type SettingRow = {
   updatedAt: Date;
 };
 
-const GROUP_META: Record<string, { title: string; blurb: string; icon: typeof Building2 }> = {
-  BUSINESS: {
-    title: "Business profile",
-    blurb: "Company identity used on receipts, the login screen and reports.",
+interface TabDef {
+  id: string;
+  title: string;
+  blurb: string;
+  icon: typeof Building2;
+  /** key prefixes this tab edits; rows are matched by prefix */
+  prefixes: string[];
+  /** prefixes to exclude (they belong to another tab) */
+  exclude?: string[];
+}
+
+const TABS: TabDef[] = [
+  {
+    id: "business",
+    title: "Business",
+    blurb: "Company identity — printed on receipts and shown on the login screen.",
     icon: Building2,
+    prefixes: ["business."],
+    exclude: ["business.receipt_footer"],
   },
-  INTEGRATIONS: {
-    title: "Integrations",
-    blurb: "Cloudinary powers product image uploads (arrives with the Products module).",
+  {
+    id: "sales",
+    title: "Sales & Receipts",
+    blurb: "Currency, credit rules and the receipt footnote customers see.",
+    icon: Receipt,
+    prefixes: ["sales.", "business.receipt_footer"],
+  },
+  {
+    id: "inventory",
+    title: "Inventory",
+    blurb: "Stock alerts and reorder defaults.",
+    icon: Boxes,
+    prefixes: ["inventory."],
+  },
+  {
+    id: "cloudinary",
+    title: "Cloudinary",
+    blurb: "Image & proof-of-payment uploads. Cloud name + unsigned preset are required for uploads.",
     icon: Cloud,
+    prefixes: ["cloudinary."],
   },
-  SYSTEM: {
+  {
+    id: "ai",
+    title: "AI Assistant",
+    blurb: "The /ai assistant — enable it and optionally connect your own API key.",
+    icon: Sparkles,
+    prefixes: ["ai."],
+  },
+  {
+    id: "chat",
+    title: "Team Chat",
+    blurb: "Switch team chat on/off and control who can create groups or delete messages.",
+    icon: MessageSquare,
+    prefixes: ["chat."],
+  },
+  {
+    id: "notifications",
+    title: "Notifications",
+    blurb: "The header bell and notification sounds for the whole company.",
+    icon: Bell,
+    prefixes: ["notifications."],
+  },
+  {
+    id: "system",
     title: "System",
-    blurb: "Core configuration — visible to the Super Admin only.",
+    blurb: "Core configuration — Super Admin only.",
     icon: Wrench,
+    prefixes: ["system."],
   },
-};
+];
+
+/** Keys rendered as password inputs (masked). */
+const SECRET_KEYS = new Set(["cloudinary.api_key", "cloudinary.api_secret", "ai.api_key"]);
 
 export default function Settings() {
   const listQuery = trpc.settings.list.useQuery();
-
-  const groups = useMemo(() => {
-    const rows = listQuery.data ?? [];
-    const map = new Map<string, SettingRow[]>();
-    for (const row of rows) {
-      const list = map.get(row.group) ?? [];
-      list.push(row);
-      map.set(row.group, list);
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [listQuery.data]);
+  const rows = useMemo(() => listQuery.data ?? [], [listQuery.data]);
 
   if (listQuery.isLoading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-56" />
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-48 w-full rounded-2xl" />
-        ))}
+        <Skeleton className="h-10 w-full max-w-2xl" />
+        <Skeleton className="h-72 w-full rounded-2xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h2 className="text-xl font-black tracking-tight text-[#22264B]">Settings</h2>
         <p className="mt-0.5 text-sm text-[#22264B]/60">
-          Business profile, currency and integrations. Approval chains arrive with the workflow
-          module.
+          Everything that configures the app — pick a tab. Tabs you don't have permission for will say so.
         </p>
       </div>
 
-      {groups.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-[#22264B]/20 bg-white/60 px-6 py-14 text-center text-sm text-[#22264B]/50">
-          You don't have permission to change any settings.
-        </div>
-      )}
+      <Tabs defaultValue="business">
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 bg-[#22264B]/[0.04] p-1">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.id} value={t.id} className="gap-1.5 text-xs font-bold">
+              <t.icon className="size-3.5" /> {t.title}
+            </TabsTrigger>
+          ))}
+          <TabsTrigger value="workflow" className="gap-1.5 text-xs font-bold">
+            <Workflow className="size-3.5" /> Workflow
+          </TabsTrigger>
+          <TabsTrigger value="preferences" className="gap-1.5 text-xs font-bold">
+            <Volume2 className="size-3.5" /> My Preferences
+          </TabsTrigger>
+        </TabsList>
 
-      {groups.map(([group, rows]) => (
-        <SettingsGroup key={group} group={group} rows={rows} />
-      ))}
+        {TABS.map((t) => (
+          <TabsContent key={t.id} value={t.id}>
+            <SettingsTab def={t} rows={rows} />
+          </TabsContent>
+        ))}
+        <TabsContent value="workflow">
+          <WorkflowTab />
+        </TabsContent>
+        <TabsContent value="preferences">
+          <PreferencesTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
 
-function SettingsGroup({ group, rows }: { group: string; rows: SettingRow[] }) {
-  const utils = trpc.useUtils();
-  const meta = GROUP_META[group] ?? {
-    title: group,
-    blurb: "",
-    icon: Wrench,
-  };
-  const Icon = meta.icon;
+/* ------------------------------- One settings tab ------------------------------ */
 
-  const [draft, setDraft] = useState<Record<string, string>>(() =>
-    Object.fromEntries(rows.map((r) => [r.key, String(r.value ?? "")])),
+function SettingsTab({ def, rows }: { def: TabDef; rows: SettingRow[] }) {
+  const utils = trpc.useUtils();
+  const mine = useMemo(
+    () =>
+      rows.filter(
+        (r) =>
+          def.prefixes.some((p) => r.key.startsWith(p)) &&
+          !(def.exclude ?? []).some((p) => r.key.startsWith(p)),
+      ),
+    [rows, def],
   );
+
+  const [draft, setDraft] = useState<Record<string, unknown>>({});
+  const valueOf = (r: SettingRow) => (r.key in draft ? draft[r.key] : r.value);
+  const dirty = mine.some((r) => r.key in draft && draft[r.key] !== r.value);
 
   const updateMutation = trpc.settings.update.useMutation({
     onSuccess: (r) => {
       toast.success(r.updated > 0 ? `Saved ${r.updated} setting(s).` : "No changes to save.");
+      setDraft({});
       utils.settings.list.invalidate();
+      utils.settings.publicConfig.invalidate();
+      utils.settings.businessIdentity.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const dirty = rows.some((r) => String(r.value ?? "") !== (draft[r.key] ?? ""));
-
   const save = () => {
     const values: Record<string, unknown> = {};
-    for (const r of rows) {
-      const raw = draft[r.key] ?? "";
-      // Numeric settings (e.g. session hours) go back as numbers.
-      values[r.key] = typeof r.value === "number" ? Number(raw) || 0 : raw;
+    for (const r of mine) {
+      if (r.key in draft && draft[r.key] !== r.value) values[r.key] = draft[r.key];
     }
     updateMutation.mutate({ values });
   };
+
+  const Icon = def.icon;
 
   return (
     <section className="overflow-hidden rounded-2xl border border-[#22264B]/10 bg-white">
@@ -127,48 +216,177 @@ function SettingsGroup({ group, rows }: { group: string; rows: SettingRow[] }) {
           <Icon className="h-4 w-4" />
         </span>
         <div>
-          <h3 className="font-bold text-[#22264B]">{meta.title}</h3>
-          <p className="mt-0.5 text-xs text-[#22264B]/60">{meta.blurb}</p>
+          <h3 className="font-bold text-[#22264B]">{def.title}</h3>
+          <p className="mt-0.5 text-xs text-[#22264B]/60">{def.blurb}</p>
         </div>
       </header>
 
-      <div className="grid gap-4 px-5 py-5 sm:grid-cols-2">
-        {rows.map((r) => (
-          <div key={r.key} className="space-y-1.5">
-            <Label htmlFor={`set-${r.key}`} className="text-[#22264B]">
-              {labelFor(r.key)}
-            </Label>
-            <Input
-              id={`set-${r.key}`}
-              type={typeof r.value === "number" ? "number" : "text"}
-              value={draft[r.key] ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))}
-              className="border-[#22264B]/15"
-            />
-            {r.description && <p className="text-xs text-[#22264B]/50">{r.description}</p>}
+      {mine.length === 0 ? (
+        <p className="px-5 py-12 text-center text-sm text-[#22264B]/50">
+          You don't have permission to view or change these settings.
+        </p>
+      ) : (
+        <>
+          <div className="grid gap-4 px-5 py-5 sm:grid-cols-2">
+            {mine.map((r) => {
+              const v = valueOf(r);
+              const isBool = typeof r.value === "boolean";
+              const isNumber = typeof r.value === "number";
+              const isSecret = SECRET_KEYS.has(r.key);
+              return (
+                <div key={r.key} className={`space-y-1.5 ${isBool ? "sm:col-span-2" : ""}`}>
+                  {isBool ? (
+                    <label
+                      htmlFor={`set-${r.key}`}
+                      className="flex items-center justify-between gap-4 rounded-xl border border-[#22264B]/10 px-4 py-3"
+                    >
+                      <span>
+                        <span className="block text-sm font-bold text-[#22264B]">{labelFor(r.key)}</span>
+                        {r.description && <span className="block text-xs text-[#22264B]/50">{r.description}</span>}
+                      </span>
+                      <Switch
+                        id={`set-${r.key}`}
+                        checked={v === true}
+                        onCheckedChange={(on) => setDraft((d) => ({ ...d, [r.key]: on }))}
+                      />
+                    </label>
+                  ) : (
+                    <>
+                      <Label htmlFor={`set-${r.key}`} className="text-[#22264B]">
+                        {labelFor(r.key)}
+                      </Label>
+                      <Input
+                        id={`set-${r.key}`}
+                        type={isSecret ? "password" : isNumber ? "number" : "text"}
+                        autoComplete="off"
+                        value={String(v ?? "")}
+                        onChange={(e) =>
+                          setDraft((d) => ({
+                            ...d,
+                            [r.key]: isNumber ? Number(e.target.value) || 0 : e.target.value,
+                          }))
+                        }
+                        className="border-[#22264B]/15"
+                      />
+                      {r.description && <p className="text-xs text-[#22264B]/50">{r.description}</p>}
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
 
-      <footer className="flex justify-end border-t border-[#22264B]/10 px-5 py-3">
-        <Button
-          onClick={save}
-          disabled={!dirty || updateMutation.isPending}
-          className="bg-[#22264B] text-white hover:bg-[#22264B]/90"
-        >
-          <Save className="mr-2 h-4 w-4" />
-          {updateMutation.isPending ? "Saving…" : "Save changes"}
-        </Button>
-      </footer>
+          <footer className="flex justify-end border-t border-[#22264B]/10 px-5 py-3">
+            <Button
+              onClick={save}
+              disabled={!dirty || updateMutation.isPending}
+              className="bg-[#22264B] text-white hover:bg-[#22264B]/90"
+            >
+              {updateMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+              {updateMutation.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </footer>
+        </>
+      )}
     </section>
   );
 }
 
-/** "business.name" → "Name"; "sales.currency_symbol" → "Currency symbol". */
+/* --------------------------------- Workflow tab -------------------------------- */
+
+function WorkflowTab() {
+  const flowsQuery = trpc.approvals.flows.useQuery();
+  const flows = flowsQuery.data ?? [];
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#22264B]/10 bg-white">
+      <header className="flex items-start gap-3 border-b border-[#22264B]/10 bg-[#F4EFE3] px-5 py-4">
+        <span className="rounded-lg bg-[#22264B] p-2 text-[#F7A026]">
+          <Workflow className="h-4 w-4" />
+        </span>
+        <div>
+          <h3 className="font-bold text-[#22264B]">Approval workflow</h3>
+          <p className="mt-0.5 text-xs text-[#22264B]/60">
+            Every sensitive action — sales, payments, deposits, refunds, expenses, credit limits, products,
+            price lists, stock and purchases — goes through an approval chain you configure here.
+          </p>
+        </div>
+      </header>
+      <div className="px-5 py-5">
+        {flowsQuery.isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {flows.map((f) => (
+              <div key={f.entityType} className="flex items-center justify-between rounded-xl border border-[#22264B]/10 px-4 py-2.5">
+                <span className="text-sm font-bold text-[#22264B]">{labelFor(`x.${f.entityType.toLowerCase()}`)}</span>
+                <span className="text-xs text-[#22264B]/55">
+                  {f.steps.length > 0 ? f.steps.map((s) => labelFor(`x.${s.toLowerCase()}`)).join(" → ") : "No approval needed"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-4 flex justify-end">
+          <Button asChild className="bg-[#22264B] text-white hover:bg-[#22264B]/90">
+            <Link to="/approvals">
+              <Workflow className="mr-2 size-4" /> Open workflow editor
+            </Link>
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------- My preferences tab ----------------------------- */
+
+function PreferencesTab() {
+  const [sound, setSound] = useState(soundsEnabled());
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#22264B]/10 bg-white">
+      <header className="flex items-start gap-3 border-b border-[#22264B]/10 bg-[#F4EFE3] px-5 py-4">
+        <span className="rounded-lg bg-[#22264B] p-2 text-[#F7A026]">
+          <Volume2 className="h-4 w-4" />
+        </span>
+        <div>
+          <h3 className="font-bold text-[#22264B]">My preferences</h3>
+          <p className="mt-0.5 text-xs text-[#22264B]/60">
+            Personal settings for this browser only — they don't affect other staff.
+          </p>
+        </div>
+      </header>
+      <div className="px-5 py-5">
+        <label className="flex max-w-xl items-center justify-between gap-4 rounded-xl border border-[#22264B]/10 px-4 py-3">
+          <span className="flex items-start gap-3">
+            {sound ? <Volume2 className="mt-0.5 size-4 text-[#22264B]" /> : <VolumeX className="mt-0.5 size-4 text-[#22264B]/40" />}
+            <span>
+              <span className="block text-sm font-bold text-[#22264B]">Sounds for messages & notifications</span>
+              <span className="block text-xs text-[#22264B]/50">
+                Pop when you send a chat message, when a message arrives, and when a new notification lands in the bell.
+              </span>
+            </span>
+          </span>
+          <Switch
+            checked={sound}
+            onCheckedChange={(on) => {
+              setSound(on);
+              setSoundsEnabled(on);
+              toast.success(on ? "Sounds on." : "Sounds muted for this browser.");
+            }}
+          />
+        </label>
+      </div>
+    </section>
+  );
+}
+
+/** "business.name" → "Name"; "APPROVAL_CHAIN" → "Approval chain". */
 function labelFor(key: string): string {
   const leaf = key.split(".").pop() ?? key;
   return leaf
     .split("_")
-    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
     .join(" ");
 }
