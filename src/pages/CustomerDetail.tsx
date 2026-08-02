@@ -170,10 +170,20 @@ export default function CustomerDetail() {
                 setEditor({
                   id: c.id,
                   fullName: c.fullName,
+                  customerType: c.customerType ?? "BUSINESS",
                   businessName: c.businessName,
+                  contactPerson: c.contactPerson,
                   phone: c.phone,
+                  altPhone: c.altPhone,
                   email: c.email,
+                  website: c.website,
+                  tin: c.tin,
+                  rcNumber: c.rcNumber,
                   address: c.address,
+                  deliveryAddress: c.deliveryAddress,
+                  city: c.city,
+                  state: c.state,
+                  country: c.country,
                   notes: c.notes,
                   creditLimit: c.creditLimit,
                 })
@@ -245,20 +255,59 @@ export default function CustomerDetail() {
         </div>
       </div>
 
-      {(c.address || c.notes) && (
-        <div className="rounded-xl border border-[#22264B]/10 bg-white p-4 text-sm text-[#22264B]/70 shadow-sm">
-          {c.address && (
-            <p>
-              <span className="font-bold text-[#22264B]">Address: </span>
-              {c.address}
-            </p>
-          )}
-          {c.notes && (
-            <p className={c.address ? "mt-1" : ""}>
-              <span className="font-bold text-[#22264B]">Notes: </span>
-              {c.notes}
-            </p>
-          )}
+      {/* Full customer details */}
+      {(c.address || c.notes || c.contactPerson || c.tin || c.rcNumber || c.website || c.city || c.deliveryAddress || c.altPhone) && (
+        <div className="rounded-xl border border-[#22264B]/10 bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-1.5 text-sm text-[#22264B]/70 sm:grid-cols-2">
+            {c.contactPerson && (
+              <p>
+                <span className="font-bold text-[#22264B]">Contact person: </span>
+                {c.contactPerson}
+              </p>
+            )}
+            {c.altPhone && (
+              <p>
+                <span className="font-bold text-[#22264B]">Alt phone: </span>
+                {c.altPhone}
+              </p>
+            )}
+            {c.rcNumber && (
+              <p>
+                <span className="font-bold text-[#22264B]">RC number: </span>
+                {c.rcNumber}
+              </p>
+            )}
+            {c.tin && (
+              <p>
+                <span className="font-bold text-[#22264B]">TIN: </span>
+                {c.tin}
+              </p>
+            )}
+            {c.website && (
+              <p className="sm:col-span-2">
+                <span className="font-bold text-[#22264B]">Website: </span>
+                {c.website}
+              </p>
+            )}
+            {c.address && (
+              <p className="sm:col-span-2">
+                <span className="font-bold text-[#22264B]">Address: </span>
+                {[c.address, c.city, c.state, c.country].filter(Boolean).join(", ")}
+              </p>
+            )}
+            {c.deliveryAddress && (
+              <p className="sm:col-span-2">
+                <span className="font-bold text-[#22264B]">Delivery address: </span>
+                {c.deliveryAddress}
+              </p>
+            )}
+            {c.notes && (
+              <p className="sm:col-span-2">
+                <span className="font-bold text-[#22264B]">Notes: </span>
+                {c.notes}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
