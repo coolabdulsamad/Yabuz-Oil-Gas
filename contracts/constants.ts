@@ -131,6 +131,10 @@ export type ApprovalStepStatus = (typeof APPROVAL_STEP_STATUSES)[number];
 export const CUSTOMER_STATUSES = ["ACTIVE", "INACTIVE", "BLOCKED"] as const;
 export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
 
+/** Individual buyer vs registered business. */
+export const CUSTOMER_TYPES = ["INDIVIDUAL", "BUSINESS"] as const;
+export type CustomerType = (typeof CUSTOMER_TYPES)[number];
+
 /* ------------------------------ CHAT & AI ------------------------------ */
 export const CONVERSATION_TYPES = ["DIRECT", "GROUP"] as const;
 export type ConversationType = (typeof CONVERSATION_TYPES)[number];

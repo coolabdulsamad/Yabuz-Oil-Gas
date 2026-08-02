@@ -18,6 +18,7 @@ import { analyticsRouter } from "./routers/analytics.router";
 import { chatRouter } from "./routers/chat.router";
 import { aiRouter } from "./routers/ai.router";
 import { auditRouter } from "./routers/audit.router";
+import { notificationsRouter } from "./routers/notifications.router";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -41,6 +42,7 @@ export const appRouter = createRouter({
   chat: chatRouter,
   ai: aiRouter,
   audit: auditRouter,
+  notifications: notificationsRouter,
 });
 
 export type AppRouter = typeof appRouter;
