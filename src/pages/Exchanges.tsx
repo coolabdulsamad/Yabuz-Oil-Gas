@@ -221,7 +221,7 @@ function NewExchangeDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[94vh] w-[95vw] max-w-6xl sm:max-w-6xl overflow-x-hidden overflow-y-auto">
+      <DialogContent className="p-3 sm:p-6 max-h-[94vh] w-[95vw] max-w-6xl sm:max-w-6xl overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New exchange</DialogTitle>
           <DialogDescription>
@@ -277,20 +277,21 @@ function NewExchangeDialog({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Item</TableHead>
-                      <TableHead className="text-right">Returnable</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
-                      <TableHead className="w-36 text-right">Qty back</TableHead>
+                      <TableHead className="hidden text-right sm:table-cell">Returnable</TableHead>
+                      <TableHead className="hidden text-right sm:table-cell">Value</TableHead>
+                      <TableHead className="w-20 text-right sm:w-36">Qty back</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {returnable.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell>
-                          <p className="max-w-[240px] truncate font-medium text-[#22264B]" title={l.productName}>{l.productName}</p>
+                          <p className="max-w-[150px] truncate font-medium text-[#22264B] sm:max-w-[240px]" title={l.productName}>{l.productName}</p>
                           <p className="text-xs text-[#22264B]/50">{l.sku}</p>
+                          <p className="text-xs font-semibold text-[#22264B]/60 sm:hidden">max {formatQty(l.returnableQty)} · {formatMoney(l.unitPrice)}</p>
                         </TableCell>
-                        <TableCell className="text-right">{formatQty(l.returnableQty)}</TableCell>
-                        <TableCell className="text-right">{formatMoney(l.unitPrice)}</TableCell>
+                        <TableCell className="hidden text-right sm:table-cell">{formatQty(l.returnableQty)}</TableCell>
+                        <TableCell className="hidden text-right sm:table-cell">{formatMoney(l.unitPrice)}</TableCell>
                         <TableCell>
                           <Input
                             type="number"
@@ -302,7 +303,7 @@ function NewExchangeDialog({
                               const v = Math.min(Number(e.target.value) || 0, l.returnableQty);
                               setReturnQty((q) => ({ ...q, [l.id]: v }));
                             }}
-                            className="h-10 w-24 min-w-[6rem] text-center text-base font-bold"
+                            className="h-10 w-16 min-w-0 text-center text-base font-bold sm:w-24"
                           />
                         </TableCell>
                       </TableRow>
@@ -339,9 +340,9 @@ function NewExchangeDialog({
                     <TableRow>
                       <TableHead>Item</TableHead>
                       <TableHead>Sell as</TableHead>
-                      <TableHead className="w-32 text-right">Qty</TableHead>
-                      <TableHead className="text-right">Unit price</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="w-16 text-right sm:w-32">Qty</TableHead>
+                      <TableHead className="hidden text-right sm:table-cell">Unit price</TableHead>
+                      <TableHead className="hidden text-right sm:table-cell">Total</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -349,13 +350,14 @@ function NewExchangeDialog({
                     {newLines.map((l) => (
                       <TableRow key={l.productId}>
                         <TableCell>
-                          <p className="max-w-[240px] truncate font-medium text-[#22264B]" title={l.name}>{l.name}</p>
+                          <p className="max-w-[130px] truncate font-medium text-[#22264B] sm:max-w-[240px]" title={l.name}>{l.name}</p>
                           <p className="text-xs text-[#22264B]/50">{l.sku} · stock {formatQty(l.stock)} packs</p>
+                          <p className="text-xs font-semibold text-[#22264B]/60 sm:hidden">{formatMoney(l.quantity * l.unitPrice)}</p>
                         </TableCell>
                         <TableCell>
                           {l.allowUnitSales ? (
                             <Select value={l.soldAsUnits ? "units" : "packs"} onValueChange={(v) => updateLine(l.productId, { soldAsUnits: v === "units" })}>
-                              <SelectTrigger className="h-8 w-24"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="h-8 w-20 sm:w-24"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="packs">Packs</SelectItem>
                                 <SelectItem value="units">Units</SelectItem>
@@ -372,11 +374,11 @@ function NewExchangeDialog({
                             step={l.soldAsUnits ? 1 : 0.5}
                             value={l.quantity}
                             onChange={(e) => updateLine(l.productId, { quantity: Number(e.target.value) || 0 })}
-                            className="h-10 w-24 min-w-[6rem] text-center text-base font-bold"
+                            className="h-10 w-16 min-w-0 text-center text-base font-bold sm:w-24"
                           />
                         </TableCell>
-                        <TableCell className="text-right">{formatMoney(l.unitPrice)}</TableCell>
-                        <TableCell className="text-right font-semibold">{formatMoney(l.quantity * l.unitPrice)}</TableCell>
+                        <TableCell className="hidden text-right sm:table-cell">{formatMoney(l.unitPrice)}</TableCell>
+                        <TableCell className="hidden text-right font-semibold sm:table-cell">{formatMoney(l.quantity * l.unitPrice)}</TableCell>
                         <TableCell>
                           <Button size="icon" variant="ghost" onClick={() => setNewLines((ls) => ls.filter((x) => x.productId !== l.productId))}>
                             <Trash2 className="size-4 text-red-500" />
@@ -467,7 +469,7 @@ function ExchangeDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const d = q.data;
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl sm:max-w-3xl overflow-y-auto">
+      <DialogContent className="p-3 sm:p-6 max-h-[90vh] w-[95vw] max-w-3xl sm:max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             Exchange {d?.ex.reference}
