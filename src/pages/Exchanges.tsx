@@ -221,7 +221,7 @@ function NewExchangeDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[94vh] w-[95vw] max-w-6xl overflow-y-auto">
+      <DialogContent className="max-h-[94vh] w-[95vw] max-w-6xl overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New exchange</DialogTitle>
           <DialogDescription>
@@ -265,8 +265,9 @@ function NewExchangeDialog({
               {!saleId && <Button size="sm" variant="ghost" onClick={() => setPickedSaleId(null)}>Change</Button>}
             </div>
 
+            <div className="grid gap-5 lg:grid-cols-2">
             {/* Returned items */}
-            <div>
+            <div className="min-w-0">
               <h3 className="mb-2 text-sm font-bold tracking-wide text-[#22264B] uppercase">1 · Items the customer returns</h3>
               {returnable.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-[#22264B]/20 p-4 text-center text-sm text-[#22264B]/50">
@@ -279,7 +280,7 @@ function NewExchangeDialog({
                       <TableHead>Item</TableHead>
                       <TableHead className="text-right">Returnable</TableHead>
                       <TableHead className="text-right">Value</TableHead>
-                      <TableHead className="w-28 text-right">Qty back</TableHead>
+                      <TableHead className="w-36 text-right">Qty back</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -302,7 +303,7 @@ function NewExchangeDialog({
                               const v = Math.min(Number(e.target.value) || 0, l.returnableQty);
                               setReturnQty((q) => ({ ...q, [l.id]: v }));
                             }}
-                            className="h-8 text-right"
+                            className="h-10 w-28 min-w-[7rem] text-center text-base font-bold"
                           />
                         </TableCell>
                       </TableRow>
@@ -339,7 +340,7 @@ function NewExchangeDialog({
                     <TableRow>
                       <TableHead>Item</TableHead>
                       <TableHead>Sell as</TableHead>
-                      <TableHead className="w-24 text-right">Qty</TableHead>
+                      <TableHead className="w-32 text-right">Qty</TableHead>
                       <TableHead className="text-right">Unit price</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead />
@@ -372,7 +373,7 @@ function NewExchangeDialog({
                             step={l.soldAsUnits ? 1 : 0.5}
                             value={l.quantity}
                             onChange={(e) => updateLine(l.productId, { quantity: Number(e.target.value) || 0 })}
-                            className="h-8 text-right"
+                            className="h-10 w-28 min-w-[7rem] text-center text-base font-bold"
                           />
                         </TableCell>
                         <TableCell className="text-right">{formatMoney(l.unitPrice)}</TableCell>
@@ -390,6 +391,7 @@ function NewExchangeDialog({
               <p className="mt-1 text-right text-sm font-semibold text-[#22264B]">New items value: {formatMoney(newTotal)}</p>
             </div>
 
+            </div>
             {/* Settlement */}
             <div>
               <h3 className="mb-2 text-sm font-bold tracking-wide text-[#22264B] uppercase">3 · Settlement</h3>
