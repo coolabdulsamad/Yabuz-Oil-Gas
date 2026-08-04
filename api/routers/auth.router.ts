@@ -117,6 +117,9 @@ export const authRouter = createRouter({
         email: z.string().email("Enter a valid email").max(160).or(z.literal("")).nullable(),
         phone: z.string().max(40).nullable(),
         avatarUrl: z.string().max(500).nullable(),
+        homeAddress: z.string().max(500).nullable(),
+        nextOfKinName: z.string().max(160).nullable(),
+        nextOfKinPhone: z.string().max(40).nullable(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -128,6 +131,9 @@ export const authRouter = createRouter({
           email: input.email || null,
           phone: input.phone,
           avatarUrl: input.avatarUrl,
+          homeAddress: input.homeAddress || null,
+          nextOfKinName: input.nextOfKinName || null,
+          nextOfKinPhone: input.nextOfKinPhone || null,
         })
         .where(eq(users.id, ctx.user.id));
 
