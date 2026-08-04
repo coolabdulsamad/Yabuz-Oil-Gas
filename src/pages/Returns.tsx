@@ -126,7 +126,7 @@ function NewReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-x-hidden overflow-y-auto">
+      <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl sm:max-w-5xl overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New return</DialogTitle>
           <DialogDescription>
@@ -268,7 +268,7 @@ function ReturnDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const d = q.data;
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl sm:max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             Return {d?.ret.reference}
