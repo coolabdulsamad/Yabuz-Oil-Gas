@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { KeyRound, Save, ShieldCheck } from "lucide-react";
+import { Building2, KeyRound, Landmark, Save, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,13 +12,27 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 
 /**
  * YABUZ OIL & GAS — my profile.
- * Self-service details + password change. Changing the password signs
- * every session out (including this one), so we bounce to /login.
+ * Shows EVERYTHING on the staff record: identity, employment, bank
+ * details (used for salary) and contact info. You can edit your own
+ * contact/next-of-kin fields; role, employment and bank details are
+ * read-only — an Admin changes those from the Staff page.
+ * Changing the password signs every session out (including this one).
  */
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs tracking-wide text-[#22264B]/50 uppercase">{label}</p>
+      <p className="mt-1 font-medium break-words text-[#22264B]">{children || "—"}</p>
+    </div>
+  );
+}
+
 export default function Profile() {
   const { user, refresh } = useAuth();
   const navigate = useNavigate();
@@ -26,6 +40,9 @@ export default function Profile() {
   const [fullName, setFullName] = useState(user?.fullName ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [homeAddress, setHomeAddress] = useState(user?.homeAddress ?? "");
+  const [nextOfKinName, setNextOfKinName] = useState(user?.nextOfKinName ?? "");
+  const [nextOfKinPhone, setNextOfKinPhone] = useState(user?.nextOfKinPhone ?? "");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -50,13 +67,18 @@ export default function Profile() {
   if (!user) return null;
 
   const profileDirty =
-    fullName !== user.fullName || email !== (user.email ?? "") || phone !== (user.phone ?? "");
+    fullName !== user.fullName ||
+    email !== (user.email ?? "") ||
+    phone !== (user.phone ?? "") ||
+    homeAddress !== (user.homeAddress ?? "") ||
+    nextOfKinName !== (user.nextOfKinName ?? "") ||
+    nextOfKinPhone !== (user.nextOfKinPhone ?? "");
 
   const passwordValid =
     currentPassword.length > 0 && newPassword.length >= 8 && newPassword === confirmPassword;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       {/* Identity card */}
       <section className="overflow-hidden rounded-2xl border border-[#22264B]/10 bg-white">
         <div className="bg-[#22264B] px-6 py-6">
@@ -73,35 +95,82 @@ export default function Profile() {
                 <Badge className="border-0 bg-[#F7A026] font-semibold text-[#22264B] hover:bg-[#F7A026]">
                   {ROLE_LABELS[user.role]}
                 </Badge>
+                <Badge
+                  variant="outline"
+                  className={
+                    user.status === "ACTIVE"
+                      ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
+                      : "border-red-400/40 bg-red-400/10 text-red-300"
+                  }
+                >
+                  {user.status === "ACTIVE" ? "Active" : "Suspended"}
+                </Badge>
                 <span className="font-mono text-xs text-[#D7C6AD]/80">{user.staffCode}</span>
               </div>
             </div>
           </div>
         </div>
         <div className="grid gap-4 px-6 py-5 text-sm sm:grid-cols-3">
+          <Field label="Username">@{user.username}</Field>
+          <Field label="Member since">{formatDate(user.createdAt)}</Field>
+          <Field label="Last login">{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "—"}</Field>
+        </div>
+      </section>
+
+      {/* Employment (read-only) */}
+      <section className="rounded-2xl border border-[#22264B]/10 bg-white">
+        <header className="flex items-start gap-3 border-b border-[#22264B]/10 px-6 py-4">
+          <span className="rounded-lg bg-[#22264B]/10 p-2 text-[#22264B]">
+            <Building2 className="h-4 w-4" />
+          </span>
           <div>
-            <p className="text-xs uppercase tracking-wide text-[#22264B]/50">Username</p>
-            <p className="mt-1 font-medium text-[#22264B]">@{user.username}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-[#22264B]/50">Member since</p>
-            <p className="mt-1 font-medium text-[#22264B]">{formatDate(user.createdAt)}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-[#22264B]/50">Last login</p>
-            <p className="mt-1 font-medium text-[#22264B]">
-              {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "—"}
+            <h3 className="font-bold text-[#22264B]">Employment</h3>
+            <p className="mt-0.5 text-xs text-[#22264B]/55">
+              Set by an Admin on the Staff page — read-only here.
             </p>
           </div>
+        </header>
+        <div className="grid gap-4 px-6 py-5 text-sm sm:grid-cols-3">
+          <Field label="Department">{user.department}</Field>
+          <Field label="Job title">{user.jobTitle}</Field>
+          <Field label="Date employed">{user.dateEmployed ? formatDate(user.dateEmployed) : "—"}</Field>
+          <div className="sm:col-span-3">
+            <Field label="Staff notes">{user.notes}</Field>
+          </div>
         </div>
+      </section>
+
+      {/* Bank details (read-only) */}
+      <section className="rounded-2xl border border-[#22264B]/10 bg-white">
+        <header className="flex items-start gap-3 border-b border-[#22264B]/10 px-6 py-4">
+          <span className="rounded-lg bg-emerald-600/10 p-2 text-emerald-700">
+            <Landmark className="h-4 w-4" />
+          </span>
+          <div>
+            <h3 className="font-bold text-[#22264B]">Bank details</h3>
+            <p className="mt-0.5 text-xs text-[#22264B]/55">
+              Where your salary is paid. For your security only an Admin can change these (Staff page).
+            </p>
+          </div>
+        </header>
+        <div className="grid gap-4 px-6 py-5 text-sm sm:grid-cols-3">
+          <Field label="Bank name">{user.bankName}</Field>
+          <Field label="Account number">{user.bankAccountNumber}</Field>
+          <Field label="Account name">{user.bankAccountName}</Field>
+        </div>
+        {!user.bankName && (
+          <p className="px-6 pb-4 text-xs font-medium text-amber-600">
+            No bank details on file yet — ask an Admin to add them so payroll can pay you.
+          </p>
+        )}
       </section>
 
       {/* Edit profile */}
       <section className="rounded-2xl border border-[#22264B]/10 bg-white">
         <header className="border-b border-[#22264B]/10 px-6 py-4">
-          <h3 className="font-bold text-[#22264B]">Profile details</h3>
+          <h3 className="font-bold text-[#22264B]">Your details — editable</h3>
           <p className="mt-0.5 text-xs text-[#22264B]/55">
-            Your name and contact info as shown to other staff.
+            Your name, contact info and next of kin as shown to other staff.
           </p>
         </header>
         <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
@@ -128,6 +197,34 @@ export default function Profile() {
               placeholder="Optional"
             />
           </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="pf-address">Home address</Label>
+            <Textarea
+              id="pf-address"
+              rows={2}
+              value={homeAddress}
+              onChange={(e) => setHomeAddress(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pf-nok">Next of kin name</Label>
+            <Input
+              id="pf-nok"
+              value={nextOfKinName}
+              onChange={(e) => setNextOfKinName(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pf-nok-phone">Next of kin phone</Label>
+            <Input
+              id="pf-nok-phone"
+              value={nextOfKinPhone}
+              onChange={(e) => setNextOfKinPhone(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
         </div>
         <footer className="flex justify-end border-t border-[#22264B]/10 px-6 py-3">
           <Button
@@ -137,6 +234,9 @@ export default function Profile() {
                 fullName: fullName.trim(),
                 email: email.trim(),
                 phone: phone.trim() || null,
+                homeAddress: homeAddress.trim() || null,
+                nextOfKinName: nextOfKinName.trim() || null,
+                nextOfKinPhone: nextOfKinPhone.trim() || null,
                 avatarUrl: user.avatarUrl,
               })
             }
