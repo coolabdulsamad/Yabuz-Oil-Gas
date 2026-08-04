@@ -9,12 +9,15 @@ import {
   customers,
   payments,
   expenses,
+  salesReturns,
+  salesExchanges,
 } from "@db/schema";
 import type { ApprovalFlowEntity, ApprovalType } from "@contracts/constants";
 import type { getDb } from "../queries/connection";
 import { applyMovement } from "./inventory.service";
 import { applyCustomerTx } from "./customers.service";
 import { confirmPaymentEffects } from "./payments.service";
+import { applyReturnEffects, applyExchangeEffects } from "./returns.service";
 import { notifyRoles, notifyUsers } from "./notifications.service";
 
 /**
@@ -295,6 +298,16 @@ export async function actOnRequest(db: Db, input: ActInput) {
             .update(expenses)
             .set({ status: "REJECTED", rejectedReason: input.note ?? "Rejected" })
             .where(eq(expenses.id, request.entityId));
+        } else if (request.requestType === "SALE_RETURN_CREATE") {
+          await tx
+            .update(salesReturns)
+            .set({ status: "REJECTED", rejectedReason: input.note ?? "Rejected" })
+            .where(eq(salesReturns.id, request.entityId));
+        } else if (request.requestType === "SALE_EXCHANGE_CREATE") {
+          await tx
+            .update(salesExchanges)
+            .set({ status: "REJECTED", rejectedReason: input.note ?? "Rejected" })
+            .where(eq(salesExchanges.id, request.entityId));
         }
       }
 
@@ -368,6 +381,10 @@ export async function actOnRequest(db: Db, input: ActInput) {
           .update(expenses)
           .set({ status: "APPROVED", approvedBy: input.reviewerId, approvedAt: new Date() })
           .where(eq(expenses.id, request.entityId));
+      } else if (request.requestType === "SALE_RETURN_CREATE") {
+        await applyReturnEffects(tx, request.entityId, input.reviewerId);
+      } else if (request.requestType === "SALE_EXCHANGE_CREATE") {
+        await applyExchangeEffects(tx, request.entityId, input.reviewerId);
       } else if (request.requestType === "CUSTOMER_CREDIT_LIMIT") {
         const payload = request.payload as { customerId?: number; creditLimit?: number } | null;
         if (payload?.customerId && typeof payload.creditLimit === "number") {
