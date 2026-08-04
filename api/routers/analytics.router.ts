@@ -3,7 +3,19 @@ import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { createRouter } from "../middleware";
 import { permissionProcedure } from "../trpc";
 import { getDb } from "../queries/connection";
-import { customers, expenses, expenseCategories, payments, saleItems, sales, users } from "@db/schema";
+import {
+  customers,
+  expenses,
+  expenseCategories,
+  payments,
+  salaryPayments,
+  saleItems,
+  sales,
+  salesExchanges,
+  salesReturns,
+  staffLoans,
+  users,
+} from "@db/schema";
 
 /**
  * YABUZ OIL & GAS — analytics router
@@ -62,6 +74,24 @@ export const analyticsRouter = createRouter({
           .select({ amount: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
           .from(payments)
           .where(and(eq(payments.status, "CONFIRMED"), sql`${payments.paymentType} <> 'DEPOSIT_REFUND'`, gte(payments.confirmedAt, f), lte(payments.confirmedAt, t)));
+        const [ret] = await getDb()
+          .select({
+            value: sql<number>`COALESCE(SUM(${salesReturns.totalAmount}), 0)`,
+            cnt: sql<number>`COUNT(*)`,
+          })
+          .from(salesReturns)
+          .where(and(eq(salesReturns.status, "COMPLETED"), gte(salesReturns.createdAt, f), lte(salesReturns.createdAt, t)));
+        const [exc] = await getDb()
+          .select({ cnt: sql<number>`COUNT(*)` })
+          .from(salesExchanges)
+          .where(and(eq(salesExchanges.status, "COMPLETED"), gte(salesExchanges.createdAt, f), lte(salesExchanges.createdAt, t)));
+        const [payroll] = await getDb()
+          .select({
+            net: sql<number>`COALESCE(SUM(${salaryPayments.netPay}), 0)`,
+            cnt: sql<number>`COUNT(*)`,
+          })
+          .from(salaryPayments)
+          .where(and(eq(salaryPayments.status, "PAID"), gte(salaryPayments.paidAt, f), lte(salaryPayments.paidAt, t)));
         const revenue = Number(rev?.revenue ?? 0);
         return {
           revenue,
@@ -71,6 +101,11 @@ export const analyticsRouter = createRouter({
           expenses: Number(exp?.amount ?? 0),
           salesCount: Number(rev?.salesCount ?? 0),
           avgSale: Number(rev?.salesCount ?? 0) > 0 ? revenue / Number(rev?.salesCount ?? 1) : 0,
+          returnsValue: Number(ret?.value ?? 0),
+          returnsCount: Number(ret?.cnt ?? 0),
+          exchangesCount: Number(exc?.cnt ?? 0),
+          payrollNet: Number(payroll?.net ?? 0),
+          payrollCount: Number(payroll?.cnt ?? 0),
         };
       }
 
@@ -85,11 +120,18 @@ export const analyticsRouter = createRouter({
         .from(customers)
         .where(eq(customers.status, "ACTIVE"));
 
+      const [loanBook] = await db
+        .select({ outstanding: sql<number>`COALESCE(SUM(${staffLoans.remainingBalance}), 0)`, cnt: sql<number>`COUNT(*)` })
+        .from(staffLoans)
+        .where(eq(staffLoans.status, "ACTIVE"));
+
       return {
         current,
         previous,
         outstanding: Number(wallets?.outstanding ?? 0),
         depositsHeld: Number(wallets?.deposits ?? 0),
+        staffLoansOutstanding: Number(loanBook?.outstanding ?? 0),
+        activeStaffLoans: Number(loanBook?.cnt ?? 0),
         from: from.toISOString(),
         to: to.toISOString(),
       };
