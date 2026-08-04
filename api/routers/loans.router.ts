@@ -211,7 +211,7 @@ export const loansRouter = createRouter({
         action: result.status === "ACTIVE" ? "loan.disbursed" : "loan.created",
         entityType: "STAFF_LOAN",
         entityId: result.loanId,
-        description: `${result.status === "ACTIVE" ? "Disbursed" : "Created"} loan ${result.reference} — ${staff.fullName} · ₦${input.amount.toLocaleString()} over ${input.termMonths} month(s) (${monthlyDeduction.toLocaleString()}/month from ${monthLabel(input.startYear, input.startMonth)})${result.expenseRef ? ` → expense ${result.expenseRef}` : ""}.`,
+        description: `${result.status === "ACTIVE" ? "Disbursed" : "Created"} loan ${result.reference} — ${staff.fullName} · ₦${input.amount.toLocaleString()} over ${input.termMonths} month(s) (₦${monthlyDeduction.toLocaleString()}/month from ${monthLabel(input.startYear, input.startMonth)})${result.expenseRef ? ` → expense ${result.expenseRef}` : ""}.`,
         afterData: { reference: result.reference, userId: input.userId, amount: input.amount, termMonths: input.termMonths, monthlyDeduction, start: `${input.startYear}-${input.startMonth}` },
         ...requestMeta(ctx.req),
       });
