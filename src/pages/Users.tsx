@@ -67,6 +67,15 @@ type StaffRow = {
   status: "ACTIVE" | "SUSPENDED";
   avatarUrl: string | null;
   staffCode: string | null;
+  department: string | null;
+  jobTitle: string | null;
+  dateEmployed: string | Date | null;
+  homeAddress: string | null;
+  nextOfKinName: string | null;
+  nextOfKinPhone: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankAccountName: string | null;
   notes: string | null;
   lastLoginAt: Date | null;
   createdAt: Date;
@@ -229,7 +238,10 @@ export default function Users() {
                           <span className="ml-2 text-xs font-medium text-[#22264B]/50">(you)</span>
                         )}
                       </p>
-                      <p className="text-xs text-[#22264B]/55">@{u.username}</p>
+                      <p className="text-xs text-[#22264B]/55">
+                        @{u.username}
+                        {u.jobTitle && <span className="text-[#22264B]/40"> · {u.jobTitle}</span>}
+                      </p>
                     </div>
                   </div>
                 </TableCell>
@@ -313,6 +325,15 @@ export default function Users() {
               role: values.role,
               email: values.email,
               phone: values.phone,
+              department: values.department,
+              jobTitle: values.jobTitle,
+              dateEmployed: values.dateEmployed,
+              homeAddress: values.homeAddress,
+              nextOfKinName: values.nextOfKinName,
+              nextOfKinPhone: values.nextOfKinPhone,
+              bankName: values.bankName,
+              bankAccountNumber: values.bankAccountNumber,
+              bankAccountName: values.bankAccountName,
               notes: values.notes,
             });
           }
@@ -339,7 +360,22 @@ interface FormValues {
   password?: string;
   email: string;
   phone: string;
+  department: string;
+  jobTitle: string;
+  dateEmployed: string;
+  homeAddress: string;
+  nextOfKinName: string;
+  nextOfKinPhone: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankAccountName: string;
   notes: string;
+}
+
+function toDateInput(v: string | Date | null | undefined): string {
+  if (!v) return "";
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
 function StaffEditorDialog({
@@ -364,6 +400,15 @@ function StaffEditorDialog({
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [department, setDepartment] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
+  const [dateEmployed, setDateEmployed] = useState("");
+  const [homeAddress, setHomeAddress] = useState("");
+  const [nextOfKinName, setNextOfKinName] = useState("");
+  const [nextOfKinPhone, setNextOfKinPhone] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankAccountName, setBankAccountName] = useState("");
   const [notes, setNotes] = useState("");
 
   // Reset the form every time the dialog target changes.
@@ -377,6 +422,15 @@ function StaffEditorDialog({
     setPassword("");
     setEmail(u?.email ?? "");
     setPhone(u?.phone ?? "");
+    setDepartment(u?.department ?? "");
+    setJobTitle(u?.jobTitle ?? "");
+    setDateEmployed(toDateInput(u?.dateEmployed));
+    setHomeAddress(u?.homeAddress ?? "");
+    setNextOfKinName(u?.nextOfKinName ?? "");
+    setNextOfKinPhone(u?.nextOfKinPhone ?? "");
+    setBankName(u?.bankName ?? "");
+    setBankAccountNumber(u?.bankAccountNumber ?? "");
+    setBankAccountName(u?.bankAccountName ?? "");
     setNotes(u?.notes ?? "");
   }
 
@@ -387,7 +441,7 @@ function StaffEditorDialog({
 
   return (
     <Dialog open={!!state} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-[#22264B]">
             {isCreate ? "Add staff member" : `Edit ${u?.fullName}`}
@@ -400,6 +454,7 @@ function StaffEditorDialog({
         </DialogHeader>
 
         <div className="grid gap-4 sm:grid-cols-2">
+          <p className="text-[11px] font-bold tracking-widest text-[#22264B]/45 uppercase sm:col-span-2">Account</p>
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="sf-name">Full name</Label>
             <Input id="sf-name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Amina Bello" />
@@ -445,6 +500,46 @@ function StaffEditorDialog({
             <Input id="sf-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
           </div>
 
+          <p className="mt-2 text-[11px] font-bold tracking-widest text-[#22264B]/45 uppercase sm:col-span-2">Employment</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="sf-dept">Department</Label>
+            <Input id="sf-dept" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Sales" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sf-title">Job title</Label>
+            <Input id="sf-title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="e.g. Sales Representative" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sf-employed">Date employed</Label>
+            <Input id="sf-employed" type="date" value={dateEmployed} onChange={(e) => setDateEmployed(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sf-nok-phone">Next of kin phone</Label>
+            <Input id="sf-nok-phone" value={nextOfKinPhone} onChange={(e) => setNextOfKinPhone(e.target.value)} placeholder="Optional" />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="sf-address">Home address</Label>
+            <Textarea id="sf-address" value={homeAddress} onChange={(e) => setHomeAddress(e.target.value)} placeholder="Optional" rows={2} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="sf-nok">Next of kin name</Label>
+            <Input id="sf-nok" value={nextOfKinName} onChange={(e) => setNextOfKinName(e.target.value)} placeholder="Optional" />
+          </div>
+
+          <p className="mt-2 text-[11px] font-bold tracking-widest text-[#22264B]/45 uppercase sm:col-span-2">Bank details — used for salary payments</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="sf-bank">Bank name</Label>
+            <Input id="sf-bank" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. First Bank" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sf-acct">Account number</Label>
+            <Input id="sf-acct" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} placeholder="10-digit NUBAN" />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="sf-acct-name">Account name</Label>
+            <Input id="sf-acct-name" value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} placeholder="Name on the bank account" />
+          </div>
+
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="sf-notes">Notes</Label>
             <Textarea id="sf-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional internal note about this staff member" rows={2} />
@@ -459,7 +554,24 @@ function StaffEditorDialog({
             disabled={!valid || busy}
             onClick={() =>
               role &&
-              onSubmit({ fullName, username, role, password, email, phone, notes })
+              onSubmit({
+                fullName,
+                username,
+                role,
+                password,
+                email,
+                phone,
+                department,
+                jobTitle,
+                dateEmployed,
+                homeAddress,
+                nextOfKinName,
+                nextOfKinPhone,
+                bankName,
+                bankAccountNumber,
+                bankAccountName,
+                notes,
+              })
             }
             className="bg-[#22264B] text-white hover:bg-[#22264B]/90"
           >
