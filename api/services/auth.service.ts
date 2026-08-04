@@ -43,6 +43,16 @@ export interface SessionUser {
   status: "ACTIVE" | "SUSPENDED";
   avatarUrl: string | null;
   staffCode: string | null;
+  department: string | null;
+  jobTitle: string | null;
+  dateEmployed: Date | string | null;
+  homeAddress: string | null;
+  nextOfKinName: string | null;
+  nextOfKinPhone: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  bankAccountName: string | null;
+  notes: string | null;
   createdAt: Date;
   lastLoginAt: Date | null;
 }
@@ -243,6 +253,16 @@ function toSessionUser(u: typeof users.$inferSelect): SessionUser {
     status: u.status,
     avatarUrl: u.avatarUrl,
     staffCode: u.staffCode,
+    department: u.department,
+    jobTitle: u.jobTitle,
+    dateEmployed: u.dateEmployed,
+    homeAddress: u.homeAddress,
+    nextOfKinName: u.nextOfKinName,
+    nextOfKinPhone: u.nextOfKinPhone,
+    bankName: u.bankName,
+    bankAccountNumber: u.bankAccountNumber,
+    bankAccountName: u.bankAccountName,
+    notes: u.notes,
     createdAt: u.createdAt,
     lastLoginAt: u.lastLoginAt,
   };
