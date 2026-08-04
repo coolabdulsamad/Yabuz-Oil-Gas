@@ -70,6 +70,7 @@ export const STOCK_MOVEMENT_TYPES = [
   "PURCHASE_IN",     // purchase order receipt
   "SALE_OUT",        // stock out through an approved sale
   "RETURN_IN",       // customer return back into stock
+  "EXCHANGE_OUT",    // new items leaving stock through an exchange
   "ADJUSTMENT_IN",
   "ADJUSTMENT_OUT",
   "COUNT_ADJUST",    // variance applied after a stock count
@@ -82,6 +83,37 @@ export type StockCountStatus = (typeof STOCK_COUNT_STATUSES)[number];
 
 export const PURCHASE_STATUSES = ["PENDING", "APPROVED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"] as const;
 export type PurchaseStatus = (typeof PURCHASE_STATUSES)[number];
+
+/* ------------------------- RETURNS & EXCHANGES ------------------------- */
+/** Returns/exchanges ride the approval chain, then complete. */
+export const RETURN_STATUSES = ["PENDING_APPROVAL", "COMPLETED", "REJECTED", "CANCELLED"] as const;
+export type ReturnStatus = (typeof RETURN_STATUSES)[number];
+
+export const EXCHANGE_STATUSES = ["PENDING_APPROVAL", "COMPLETED", "REJECTED", "CANCELLED"] as const;
+export type ExchangeStatus = (typeof EXCHANGE_STATUSES)[number];
+
+/** How the money difference on an exchange is settled. */
+export const EXCHANGE_SETTLEMENTS = [
+  "NONE",            // returned value == new items value
+  "TOPUP_CASH",      // customer tops up by cash
+  "TOPUP_TRANSFER",  // customer tops up by bank transfer
+  "TOPUP_POS",       // customer tops up by POS
+  "TOPUP_CHEQUE",    // customer tops up by cheque
+  "TOPUP_DEPOSIT",   // difference drawn from the customer's deposit wallet
+  "TOPUP_CREDIT",    // difference added to the customer's outstanding credit
+  "TO_DEPOSIT",      // new items cost LESS — difference credited to the deposit wallet
+] as const;
+export type ExchangeSettlement = (typeof EXCHANGE_SETTLEMENTS)[number];
+
+/* ------------------------- PAYROLL & STAFF LOANS ------------------------- */
+export const SALARY_PAYMENT_STATUSES = ["PENDING", "PAID", "CANCELLED"] as const;
+export type SalaryPaymentStatus = (typeof SALARY_PAYMENT_STATUSES)[number];
+
+export const SALARY_PAYMENT_METHODS = ["BANK_TRANSFER", "CASH", "CHEQUE"] as const;
+export type SalaryPaymentMethod = (typeof SALARY_PAYMENT_METHODS)[number];
+
+export const LOAN_STATUSES = ["PENDING", "ACTIVE", "PAID_OFF", "REJECTED", "CANCELLED"] as const;
+export type LoanStatus = (typeof LOAN_STATUSES)[number];
 
 /* ------------------------------ EXPENSES ------------------------------ */
 export const EXPENSE_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
@@ -100,6 +132,8 @@ export const APPROVAL_FLOW_ENTITIES = [
   "STOCK_COUNT",
   "PURCHASE_ORDER",
   "CUSTOMER_CREDIT",
+  "SALE_RETURN",
+  "SALE_EXCHANGE",
 ] as const;
 export type ApprovalFlowEntity = (typeof APPROVAL_FLOW_ENTITIES)[number];
 
@@ -118,6 +152,8 @@ export const APPROVAL_TYPES = [
   "STOCK_COUNT_APPLY",
   "PURCHASE_ORDER",
   "CUSTOMER_CREDIT_LIMIT",
+  "SALE_RETURN_CREATE",
+  "SALE_EXCHANGE_CREATE",
 ] as const;
 export type ApprovalType = (typeof APPROVAL_TYPES)[number];
 
