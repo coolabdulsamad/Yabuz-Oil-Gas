@@ -126,7 +126,7 @@ function NewReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New return</DialogTitle>
           <DialogDescription>
@@ -191,7 +191,7 @@ function NewReturnDialog({
                     <TableHead className="text-right">Sold</TableHead>
                     <TableHead className="text-right">Returnable</TableHead>
                     <TableHead className="text-right">Unit price</TableHead>
-                    <TableHead className="w-28 text-right">Return qty</TableHead>
+                    <TableHead className="w-36 text-right">Return qty</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -215,7 +215,7 @@ function NewReturnDialog({
                             const v = Math.min(Number(e.target.value) || 0, l.returnableQty);
                             setQty((q) => ({ ...q, [l.id]: v }));
                           }}
-                          className="h-8 text-right"
+                          className="h-10 w-28 min-w-[7rem] text-center text-base font-bold"
                         />
                       </TableCell>
                     </TableRow>
