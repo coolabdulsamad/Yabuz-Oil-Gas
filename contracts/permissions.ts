@@ -28,6 +28,18 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: "sales.sell_on_credit", label: "Sell on credit", group: "Sales", description: "Complete a sale without full payment (customer owes the balance)." },
   { key: "sales.cancel", label: "Cancel sales", group: "Sales", description: "Cancel/void a sale (stock is restored; may require approval)." },
 
+  // ---- RETURNS & EXCHANGES ----
+  { key: "returns.view", label: "View returns", group: "Returns & Exchanges", description: "See item/sale returns and their status." },
+  { key: "returns.create", label: "Process returns", group: "Returns & Exchanges", description: "Return items or a whole sale — the value goes into the customer's advance deposit wallet (goes through approval workflow)." },
+  { key: "exchanges.view", label: "View exchanges", group: "Returns & Exchanges", description: "See item exchanges and their status." },
+  { key: "exchanges.create", label: "Process exchanges", group: "Returns & Exchanges", description: "Swap sold items for new ones — customer tops up by cash/transfer/POS/cheque/credit/deposit, or the difference goes to their deposit wallet (goes through approval workflow)." },
+
+  // ---- PAYROLL & LOANS ----
+  { key: "salary.view", label: "View payroll", group: "Payroll & Loans", description: "See salary configurations, payroll history and payslips." },
+  { key: "salary.manage", label: "Manage payroll", group: "Payroll & Loans", description: "Configure staff salaries, generate payroll and record salary payments (Admin & Super Admin only)." },
+  { key: "loans.view", label: "View staff loans", group: "Payroll & Loans", description: "See staff loans, balances and deduction schedules." },
+  { key: "loans.manage", label: "Manage staff loans", group: "Payroll & Loans", description: "Grant loans to staff and manage salary-deduction repayment (Admin & Super Admin only)." },
+
   // ---- PAYMENTS ----
   { key: "payments.view", label: "View payments", group: "Payments", description: "Open the payments module." },
   { key: "payments.view_all", label: "View all payments", group: "Payments", description: "See payments recorded by all staff." },
@@ -112,6 +124,10 @@ const SALES_DEFAULTS = [
   "inventory.view",
   "customers.view",
   "customers.manage",
+  "returns.view",
+  "returns.create",
+  "exchanges.view",
+  "exchanges.create",
   "chat.use",
 ];
 
@@ -156,6 +172,10 @@ const ADMIN_DEFAULTS = [
   "settings.business",
   "settings.workflow",
   "audit.view",
+  "salary.view",
+  "salary.manage",
+  "loans.view",
+  "loans.manage",
 ];
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
@@ -185,4 +205,6 @@ export const APPROVAL_GATED_PERMISSIONS = [
   "inventory.stock_count",
   "inventory.manage_purchases",
   "credit.manage",
+  "returns.create",
+  "exchanges.create",
 ] as const;
