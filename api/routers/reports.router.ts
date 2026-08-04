@@ -9,8 +9,14 @@ import {
   expenses,
   payments,
   products,
+  salaryPayments,
   saleItems,
   sales,
+  salesExchanges,
+  salesReturnItems,
+  salesReturns,
+  staffLoanRepayments,
+  staffLoans,
   stockMovements,
   users,
 } from "@db/schema";
@@ -513,4 +519,196 @@ export const reportsRouter = createRouter({
         netMarginPct: revenue > 0 ? ((grossMargin - expenseTotal) / revenue) * 100 : 0,
       };
     }),
+
+  /* ------------------------------ RETURNS REPORT ----------------------------- */
+
+  returnsReport: permissionProcedure("reports.view")
+    .input(rangeInput)
+    .query(async ({ input }) => {
+      const db = getDb();
+      const conds: SQL[] = [];
+      const from = fromDate(input?.dateFrom);
+      const to = toDate(input?.dateTo);
+      if (from) conds.push(gte(salesReturns.createdAt, from));
+      if (to) conds.push(lte(salesReturns.createdAt, to));
+
+      const rows = await db
+        .select({
+          ret: salesReturns,
+          orderNo: sales.orderNo,
+          customerName: customers.fullName,
+          processorName: users.fullName,
+        })
+        .from(salesReturns)
+        .innerJoin(sales, eq(sales.id, salesReturns.saleId))
+        .leftJoin(customers, eq(customers.id, salesReturns.customerId))
+        .innerJoin(users, eq(users.id, salesReturns.processedBy))
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(salesReturns.createdAt))
+        .limit(1000);
+
+      const itemCounts = await db
+        .select({ returnId: salesReturnItems.returnId, qty: sql<number>`COALESCE(SUM(${salesReturnItems.quantity}), 0)` })
+        .from(salesReturnItems)
+        .groupBy(salesReturnItems.returnId);
+      const qtyBy = new Map(itemCounts.map((r) => [r.returnId, Number(r.qty)]));
+
+      const items = rows.map((r) => ({
+        ...r.ret,
+        orderNo: r.orderNo,
+        customerName: r.customerName ?? "Walk-in",
+        processorName: r.processorName,
+        itemQty: qtyBy.get(r.ret.id) ?? 0,
+      }));
+      const completed = items.filter((i) => i.status === "COMPLETED");
+      return {
+        items,
+        totals: {
+          count: items.length,
+          completedCount: completed.length,
+          pendingCount: items.filter((i) => i.status === "PENDING_APPROVAL").length,
+          totalValue: completed.reduce((s, r) => s + Number(r.totalAmount), 0),
+          totalQty: completed.reduce((s, r) => s + r.itemQty, 0),
+        },
+      };
+    }),
+
+  /* ----------------------------- EXCHANGES REPORT ---------------------------- */
+
+  exchangesReport: permissionProcedure("reports.view")
+    .input(rangeInput)
+    .query(async ({ input }) => {
+      const db = getDb();
+      const conds: SQL[] = [];
+      const from = fromDate(input?.dateFrom);
+      const to = toDate(input?.dateTo);
+      if (from) conds.push(gte(salesExchanges.createdAt, from));
+      if (to) conds.push(lte(salesExchanges.createdAt, to));
+
+      const rows = await db
+        .select({
+          ex: salesExchanges,
+          orderNo: sales.orderNo,
+          customerName: customers.fullName,
+          processorName: users.fullName,
+        })
+        .from(salesExchanges)
+        .innerJoin(sales, eq(sales.id, salesExchanges.saleId))
+        .leftJoin(customers, eq(customers.id, salesExchanges.customerId))
+        .innerJoin(users, eq(users.id, salesExchanges.processedBy))
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(salesExchanges.createdAt))
+        .limit(1000);
+
+      const items = rows.map((r) => ({
+        ...r.ex,
+        orderNo: r.orderNo,
+        customerName: r.customerName ?? "Walk-in",
+        processorName: r.processorName,
+      }));
+      const completed = items.filter((i) => i.status === "COMPLETED");
+      return {
+        items,
+        totals: {
+          count: items.length,
+          completedCount: completed.length,
+          pendingCount: items.filter((i) => i.status === "PENDING_APPROVAL").length,
+          returnedValue: completed.reduce((s, r) => s + Number(r.returnedTotal), 0),
+          newValue: completed.reduce((s, r) => s + Number(r.newTotal), 0),
+          topupsCollected: completed.filter((r) => Number(r.difference) > 0).reduce((s, r) => s + Number(r.difference), 0),
+          creditedToDeposits: completed.filter((r) => Number(r.difference) < 0).reduce((s, r) => s - Number(r.difference), 0),
+        },
+      };
+    }),
+
+  /* ------------------------------ PAYROLL REPORT ----------------------------- */
+
+  payrollReport: permissionProcedure("reports.view")
+    .input(
+      rangeInput.and(
+        z
+          .object({
+            year: z.number().int().optional(),
+            month: z.number().int().min(1).max(12).optional(),
+          })
+          .optional(),
+      ),
+    )
+    .query(async ({ input }) => {
+      const db = getDb();
+      const conds: SQL[] = [];
+      if (input?.year) conds.push(eq(salaryPayments.periodYear, input.year));
+      if (input?.month) conds.push(eq(salaryPayments.periodMonth, input.month));
+      const rows = await db
+        .select({
+          pay: salaryPayments,
+          staffName: users.fullName,
+          staffCode: users.staffCode,
+          role: users.role,
+          department: users.department,
+        })
+        .from(salaryPayments)
+        .innerJoin(users, eq(users.id, salaryPayments.userId))
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(salaryPayments.periodYear), desc(salaryPayments.periodMonth), asc(users.fullName))
+        .limit(1000);
+
+      const items = rows.map((r) => ({ ...r.pay, staffName: r.staffName, staffCode: r.staffCode, role: r.role, department: r.department }));
+      const paid = items.filter((i) => i.status === "PAID");
+      return {
+        items,
+        totals: {
+          count: items.length,
+          paidCount: paid.length,
+          pendingCount: items.filter((i) => i.status === "PENDING").length,
+          gross: paid.reduce((s, r) => s + Number(r.grossPay), 0),
+          tax: paid.reduce((s, r) => s + Number(r.taxAmount), 0),
+          pension: paid.reduce((s, r) => s + Number(r.pensionAmount), 0),
+          vat: paid.reduce((s, r) => s + Number(r.vatAmount), 0),
+          loanDeductions: paid.reduce((s, r) => s + Number(r.loanDeduction), 0),
+          otherDeductions: paid.reduce((s, r) => s + Number(r.otherDeduction), 0),
+          netPaid: paid.reduce((s, r) => s + Number(r.netPay), 0),
+        },
+      };
+    }),
+
+  /* ------------------------------- LOANS REPORT ------------------------------ */
+
+  loansReport: permissionProcedure("reports.view").query(async () => {
+    const db = getDb();
+    const rows = await db
+      .select({
+        loan: staffLoans,
+        staffName: users.fullName,
+        staffCode: users.staffCode,
+      })
+      .from(staffLoans)
+      .innerJoin(users, eq(users.id, staffLoans.userId))
+      .orderBy(desc(staffLoans.createdAt))
+      .limit(1000);
+
+    const repayCounts = await db
+      .select({ loanId: staffLoanRepayments.loanId, paid: sql<number>`COALESCE(SUM(${staffLoanRepayments.amount}), 0)`, cnt: sql<number>`COUNT(*)` })
+      .from(staffLoanRepayments)
+      .groupBy(staffLoanRepayments.loanId);
+    const byLoan = new Map(repayCounts.map((r) => [r.loanId, { paid: Number(r.paid), cnt: Number(r.cnt) }]));
+
+    const items = rows.map((r) => ({
+      ...r.loan,
+      staffName: r.staffName,
+      staffCode: r.staffCode,
+      installmentCount: byLoan.get(r.loan.id)?.cnt ?? 0,
+    }));
+    const active = items.filter((i) => i.status === "ACTIVE");
+    return {
+      items,
+      totals: {
+        count: items.length,
+        activeCount: active.length,
+        disbursed: items.filter((i) => i.status !== "REJECTED" && i.status !== "CANCELLED").reduce((s, r) => s + Number(r.amount), 0),
+        recovered: items.reduce((s, r) => s + Number(r.amountRepaid), 0),
+        outstanding: active.reduce((s, r) => s + Number(r.remainingBalance), 0),
+      },
+    };
+  }),
 });
