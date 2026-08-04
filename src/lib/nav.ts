@@ -19,6 +19,10 @@ import {
   Settings,
   CreditCard,
   PiggyBank,
+  RotateCcw,
+  ArrowLeftRight,
+  Banknote,
+  HandCoins,
   type LucideIcon,
 } from "lucide-react";
 
@@ -55,6 +59,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { title: "Payments", path: "/payments", icon: Wallet, anyOf: ["payments.view"] },
       { title: "Credit", path: "/credit", icon: CreditCard, anyOf: ["credit.view"] },
       { title: "Deposits", path: "/deposits", icon: PiggyBank, anyOf: ["deposits.view"] },
+      { title: "Returns", path: "/returns", icon: RotateCcw, anyOf: ["returns.view"] },
+      { title: "Exchanges", path: "/exchanges", icon: ArrowLeftRight, anyOf: ["exchanges.view"] },
       { title: "Expenses", path: "/expenses", icon: Receipt, anyOf: ["expenses.view"] },
     ],
   },
@@ -72,6 +78,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: "Customers", path: "/customers", icon: Users, anyOf: ["customers.view"] },
       { title: "Staff", path: "/users", icon: UserCog, anyOf: ["users.view"] },
+      { title: "Salary", path: "/salary", icon: Banknote, anyOf: ["salary.view"] },
+      { title: "Staff Loans", path: "/loans", icon: HandCoins, anyOf: ["loans.view"] },
     ],
   },
   {

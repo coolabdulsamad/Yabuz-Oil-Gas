@@ -32,6 +32,11 @@ import Analytics from "@/pages/Analytics";
 import TeamChat from "@/pages/TeamChat";
 import AiChat from "@/pages/AiChat";
 import AuditLog from "@/pages/AuditLog";
+import Returns from "@/pages/Returns";
+import Exchanges from "@/pages/Exchanges";
+import Salary from "@/pages/Salary";
+import Payslip from "@/pages/Payslip";
+import Loans from "@/pages/Loans";
 
 export default function App() {
   return (
@@ -40,6 +45,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         {/* Standalone printable receipt — no app shell */}
         <Route path="/sales/:id/receipt" element={<SaleReceipt />} />
+        {/* Standalone printable payslip — no app shell */}
+        <Route path="/salary/:id/payslip" element={<Payslip />} />
 
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />
@@ -51,6 +58,10 @@ export default function App() {
           <Route path="/payments" element={<Payments />} />
           <Route path="/credit" element={<Credit />} />
           <Route path="/deposits" element={<Deposits />} />
+          <Route path="/returns" element={<Returns />} />
+          <Route path="/exchanges" element={<Exchanges />} />
+          <Route path="/salary" element={<Salary />} />
+          <Route path="/loans" element={<Loans />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/products" element={<Products />} />
           <Route path="/products/:id" element={<ProductDetail />} />
