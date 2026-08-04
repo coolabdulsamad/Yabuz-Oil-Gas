@@ -198,7 +198,7 @@ function NewReturnDialog({
                   {lines.map((l) => (
                     <TableRow key={l.id}>
                       <TableCell>
-                        <p className="font-medium text-[#22264B]">{l.productName}</p>
+                        <p className="max-w-[240px] truncate font-medium text-[#22264B]" title={l.productName}>{l.productName}</p>
                         <p className="text-xs text-[#22264B]/50">{l.sku} · {l.soldAsUnits ? "units" : "packs"}</p>
                       </TableCell>
                       <TableCell className="text-right">{formatQty(l.quantity)}</TableCell>
@@ -215,7 +215,7 @@ function NewReturnDialog({
                             const v = Math.min(Number(e.target.value) || 0, l.returnableQty);
                             setQty((q) => ({ ...q, [l.id]: v }));
                           }}
-                          className="h-10 w-28 min-w-[7rem] text-center text-base font-bold"
+                          className="h-10 w-24 min-w-[6rem] text-center text-base font-bold"
                         />
                       </TableCell>
                     </TableRow>
