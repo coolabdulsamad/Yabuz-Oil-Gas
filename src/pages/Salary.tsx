@@ -123,7 +123,7 @@ function ConfigDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Salary configuration — {staff.fullName}</DialogTitle>
           <DialogDescription>{staff.staffCode ?? ""} · everything below is snapshotted onto each payslip.</DialogDescription>
