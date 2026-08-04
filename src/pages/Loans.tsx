@@ -95,7 +95,7 @@ function NewLoanDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[92vh] w-[95vw] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New staff loan</DialogTitle>
           <DialogDescription>Repayment is deducted automatically from the staff member's salary.</DialogDescription>
@@ -192,7 +192,7 @@ function LoanDetail({ id, onClose, onChanged }: { id: number; onClose: () => voi
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] w-[95vw] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             Loan {d?.loan.reference}
