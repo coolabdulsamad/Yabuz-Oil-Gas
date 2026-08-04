@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Ban, Loader2, Pause, Pencil, Play, Printer, Send } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Ban, Loader2, Pause, Pencil, Play, Printer, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -137,6 +137,20 @@ export default function SaleDetail() {
             <Button asChild variant="outline" className="border-[#F7A026]/50 text-[#22264B] hover:bg-[#F7A026]/10">
               <Link to={`/sales/${sale.id}/receipt`} target="_blank">
                 <Printer className="mr-1 size-4" /> Receipt
+              </Link>
+            </Button>
+          )}
+          {sale.status === "COMPLETED" && hasPermission("returns.create") && (
+            <Button asChild variant="outline" className="text-[#22264B]">
+              <Link to={`/returns?sale=${sale.id}`}>
+                <RotateCcw className="mr-1 size-4" /> Return
+              </Link>
+            </Button>
+          )}
+          {sale.status === "COMPLETED" && hasPermission("exchanges.create") && (
+            <Button asChild variant="outline" className="text-[#22264B]">
+              <Link to={`/exchanges?sale=${sale.id}`}>
+                <ArrowLeftRight className="mr-1 size-4" /> Exchange
               </Link>
             </Button>
           )}
