@@ -265,9 +265,8 @@ function NewExchangeDialog({
               {!saleId && <Button size="sm" variant="ghost" onClick={() => setPickedSaleId(null)}>Change</Button>}
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-2">
             {/* Returned items */}
-            <div className="min-w-0">
+            <div>
               <h3 className="mb-2 text-sm font-bold tracking-wide text-[#22264B] uppercase">1 · Items the customer returns</h3>
               {returnable.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-[#22264B]/20 p-4 text-center text-sm text-[#22264B]/50">
@@ -287,7 +286,7 @@ function NewExchangeDialog({
                     {returnable.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell>
-                          <p className="font-medium text-[#22264B]">{l.productName}</p>
+                          <p className="max-w-[240px] truncate font-medium text-[#22264B]" title={l.productName}>{l.productName}</p>
                           <p className="text-xs text-[#22264B]/50">{l.sku}</p>
                         </TableCell>
                         <TableCell className="text-right">{formatQty(l.returnableQty)}</TableCell>
@@ -303,7 +302,7 @@ function NewExchangeDialog({
                               const v = Math.min(Number(e.target.value) || 0, l.returnableQty);
                               setReturnQty((q) => ({ ...q, [l.id]: v }));
                             }}
-                            className="h-10 w-28 min-w-[7rem] text-center text-base font-bold"
+                            className="h-10 w-24 min-w-[6rem] text-center text-base font-bold"
                           />
                         </TableCell>
                       </TableRow>
@@ -350,7 +349,7 @@ function NewExchangeDialog({
                     {newLines.map((l) => (
                       <TableRow key={l.productId}>
                         <TableCell>
-                          <p className="font-medium text-[#22264B]">{l.name}</p>
+                          <p className="max-w-[240px] truncate font-medium text-[#22264B]" title={l.name}>{l.name}</p>
                           <p className="text-xs text-[#22264B]/50">{l.sku} · stock {formatQty(l.stock)} packs</p>
                         </TableCell>
                         <TableCell>
@@ -373,7 +372,7 @@ function NewExchangeDialog({
                             step={l.soldAsUnits ? 1 : 0.5}
                             value={l.quantity}
                             onChange={(e) => updateLine(l.productId, { quantity: Number(e.target.value) || 0 })}
-                            className="h-10 w-28 min-w-[7rem] text-center text-base font-bold"
+                            className="h-10 w-24 min-w-[6rem] text-center text-base font-bold"
                           />
                         </TableCell>
                         <TableCell className="text-right">{formatMoney(l.unitPrice)}</TableCell>
@@ -391,7 +390,6 @@ function NewExchangeDialog({
               <p className="mt-1 text-right text-sm font-semibold text-[#22264B]">New items value: {formatMoney(newTotal)}</p>
             </div>
 
-            </div>
             {/* Settlement */}
             <div>
               <h3 className="mb-2 text-sm font-bold tracking-wide text-[#22264B] uppercase">3 · Settlement</h3>
