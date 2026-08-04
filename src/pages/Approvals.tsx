@@ -76,6 +76,8 @@ const FLOW_LABELS: Record<string, string> = {
   STOCK_COUNT: "Stock counts",
   PURCHASE_ORDER: "Purchase orders",
   CUSTOMER_CREDIT: "Customer credit",
+  SALE_RETURN: "Sales returns",
+  SALE_EXCHANGE: "Sales exchanges",
 };
 
 interface RequestRow {
