@@ -190,6 +190,32 @@ export default function Analytics() {
         </div>
       </div>
 
+      {/* Operations + payroll KPIs */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
+          <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Returns</p>
+          <p className="mt-1 text-lg font-extrabold text-[#22264B]">{formatMoney(cur?.returnsValue)}</p>
+          <p className="text-[11px] text-[#22264B]/50">{cur?.returnsCount ?? 0} return{(cur?.returnsCount ?? 0) === 1 ? "" : "s"} · {cur?.exchangesCount ?? 0} exchange{(cur?.exchangesCount ?? 0) === 1 ? "" : "s"}</p>
+        </div>
+        <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
+          <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Payroll (net paid)</p>
+          <p className="mt-1 text-lg font-extrabold text-[#22264B]">{formatMoney(cur?.payrollNet)}</p>
+          <p className="text-[11px] text-[#22264B]/50">{cur?.payrollCount ?? 0} payslip{(cur?.payrollCount ?? 0) === 1 ? "" : "s"} paid in window</p>
+        </div>
+        <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
+          <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Staff loans outstanding</p>
+          <p className="mt-1 text-lg font-extrabold text-amber-700">{formatMoney(overview.data?.staffLoansOutstanding)}</p>
+          <p className="text-[11px] text-[#22264B]/50">{overview.data?.activeStaffLoans ?? 0} active loan{(overview.data?.activeStaffLoans ?? 0) === 1 ? "" : "s"}</p>
+        </div>
+        <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
+          <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Returns vs revenue</p>
+          <p className="mt-1 text-lg font-extrabold text-[#22264B]">
+            {cur?.revenue ? `${(((cur?.returnsValue ?? 0) / cur.revenue) * 100).toFixed(1)}%` : "—"}
+          </p>
+          <p className="text-[11px] text-[#22264B]/50">of completed-sale value came back</p>
+        </div>
+      </div>
+
       {/* Trend */}
       <Panel title="Money trend" subtitle="Daily revenue from completed sales vs cash confirmed vs expenses">
         {trend.isLoading ? (
