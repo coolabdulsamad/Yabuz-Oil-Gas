@@ -123,7 +123,7 @@ function ConfigDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Salary configuration — {staff.fullName}</DialogTitle>
           <DialogDescription>{staff.staffCode ?? ""} · everything below is snapshotted onto each payslip.</DialogDescription>
@@ -211,7 +211,7 @@ function GenerateDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
   });
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="w-[95vw] max-w-md">
         <DialogHeader>
           <DialogTitle>Generate payroll</DialogTitle>
           <DialogDescription>Creates a PENDING payslip for every staff with an active salary config. Active loans are deducted automatically.</DialogDescription>
@@ -261,7 +261,7 @@ function PayDialog({
   });
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[95vw] max-w-lg">
         <DialogHeader>
           <DialogTitle>Pay salary — {pay.staffName}</DialogTitle>
           <DialogDescription>{pay.reference} · net pay <strong>{formatMoney(pay.netPay)}</strong>. An approved expense is booked automatically.</DialogDescription>
@@ -541,7 +541,7 @@ export default function Salary() {
       {configTarget && <ConfigDialog staff={configTarget} onClose={() => setConfigTarget(null)} onDone={() => configsQuery.refetch()} />}
 
       <Dialog open={cancelTarget != null} onOpenChange={(v) => !v && setCancelTarget(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-[95vw] max-w-md">
           <DialogHeader>
             <DialogTitle>Cancel payslip</DialogTitle>
             <DialogDescription>Only pending payslips can be cancelled. This is recorded in the audit log.</DialogDescription>
