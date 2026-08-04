@@ -126,7 +126,7 @@ function NewReturnDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[92vh] w-[95vw] max-w-5xl sm:max-w-5xl overflow-x-hidden overflow-y-auto">
+      <DialogContent className="p-3 sm:p-6 max-h-[92vh] w-[95vw] max-w-5xl sm:max-w-5xl overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New return</DialogTitle>
           <DialogDescription>
@@ -188,22 +188,23 @@ function NewReturnDialog({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Item</TableHead>
-                    <TableHead className="text-right">Sold</TableHead>
+                    <TableHead className="hidden text-right sm:table-cell">Sold</TableHead>
                     <TableHead className="text-right">Returnable</TableHead>
-                    <TableHead className="text-right">Unit price</TableHead>
-                    <TableHead className="w-36 text-right">Return qty</TableHead>
+                    <TableHead className="hidden text-right sm:table-cell">Unit price</TableHead>
+                    <TableHead className="w-20 text-right sm:w-36">Return qty</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {lines.map((l) => (
                     <TableRow key={l.id}>
                       <TableCell>
-                        <p className="max-w-[240px] truncate font-medium text-[#22264B]" title={l.productName}>{l.productName}</p>
+                        <p className="max-w-[140px] truncate font-medium text-[#22264B] sm:max-w-[240px]" title={l.productName}>{l.productName}</p>
                         <p className="text-xs text-[#22264B]/50">{l.sku} · {l.soldAsUnits ? "units" : "packs"}</p>
+                        <p className="text-xs font-semibold text-[#22264B]/60 sm:hidden">{formatMoney(l.unitPrice)}</p>
                       </TableCell>
-                      <TableCell className="text-right">{formatQty(l.quantity)}</TableCell>
+                      <TableCell className="hidden text-right sm:table-cell">{formatQty(l.quantity)}</TableCell>
                       <TableCell className="text-right font-semibold">{formatQty(l.returnableQty)}</TableCell>
-                      <TableCell className="text-right">{formatMoney(l.unitPrice)}</TableCell>
+                      <TableCell className="hidden text-right sm:table-cell">{formatMoney(l.unitPrice)}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
@@ -215,7 +216,7 @@ function NewReturnDialog({
                             const v = Math.min(Number(e.target.value) || 0, l.returnableQty);
                             setQty((q) => ({ ...q, [l.id]: v }));
                           }}
-                          className="h-10 w-24 min-w-[6rem] text-center text-base font-bold"
+                          className="h-10 w-16 min-w-0 text-center text-base font-bold sm:w-24"
                         />
                       </TableCell>
                     </TableRow>
@@ -268,7 +269,7 @@ function ReturnDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const d = q.data;
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl sm:max-w-3xl overflow-y-auto">
+      <DialogContent className="p-3 sm:p-6 max-h-[90vh] w-[95vw] max-w-3xl sm:max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             Return {d?.ret.reference}
