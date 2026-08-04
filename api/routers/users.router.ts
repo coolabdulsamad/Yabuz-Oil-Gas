@@ -35,6 +35,54 @@ function staffCodeFor(id: number): string {
   return `YOG-${String(id).padStart(4, "0")}`;
 }
 
+/** Shared staff profile & bank detail fields (payroll uses the bank details to pay salaries). */
+const staffFields = {
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().max(40).optional().or(z.literal("")),
+  department: z.string().max(120).optional().or(z.literal("")),
+  jobTitle: z.string().max(120).optional().or(z.literal("")),
+  dateEmployed: z.string().optional().or(z.literal("")),
+  homeAddress: z.string().max(2000).optional().or(z.literal("")),
+  nextOfKinName: z.string().max(160).optional().or(z.literal("")),
+  nextOfKinPhone: z.string().max(40).optional().or(z.literal("")),
+  bankName: z.string().max(120).optional().or(z.literal("")),
+  bankAccountNumber: z.string().max(20).optional().or(z.literal("")),
+  bankAccountName: z.string().max(160).optional().or(z.literal("")),
+  notes: z.string().max(2000).optional().or(z.literal("")),
+};
+
+interface StaffFieldValues {
+  email?: string;
+  phone?: string;
+  department?: string;
+  jobTitle?: string;
+  dateEmployed?: string;
+  homeAddress?: string;
+  nextOfKinName?: string;
+  nextOfKinPhone?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  notes?: string;
+}
+
+function staffValues(input: StaffFieldValues) {
+  return {
+    email: input.email || null,
+    phone: input.phone || null,
+    department: input.department || null,
+    jobTitle: input.jobTitle || null,
+    dateEmployed: input.dateEmployed ? new Date(`${input.dateEmployed}T00:00:00`) : null,
+    homeAddress: input.homeAddress || null,
+    nextOfKinName: input.nextOfKinName || null,
+    nextOfKinPhone: input.nextOfKinPhone || null,
+    bankName: input.bankName || null,
+    bankAccountNumber: input.bankAccountNumber || null,
+    bankAccountName: input.bankAccountName || null,
+    notes: input.notes || null,
+  };
+}
+
 const createInput = z.object({
   fullName: z.string().min(2, "Full name is required"),
   username: z
@@ -44,18 +92,14 @@ const createInput = z.object({
     .regex(/^[a-zA-Z0-9._-]+$/, "Letters, numbers, dot, dash and underscore only"),
   role: z.enum(USER_ROLES),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().max(40).optional().or(z.literal("")),
-  notes: z.string().max(2000).optional().or(z.literal("")),
+  ...staffFields,
 });
 
 const updateInput = z.object({
   id: z.number(),
   fullName: z.string().min(2),
   role: z.enum(USER_ROLES),
-  email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().max(40).optional().or(z.literal("")),
-  notes: z.string().max(2000).optional().or(z.literal("")),
+  ...staffFields,
 });
 
 export const usersRouter = createRouter({
@@ -74,6 +118,15 @@ export const usersRouter = createRouter({
         status: users.status,
         avatarUrl: users.avatarUrl,
         staffCode: users.staffCode,
+        department: users.department,
+        jobTitle: users.jobTitle,
+        dateEmployed: users.dateEmployed,
+        homeAddress: users.homeAddress,
+        nextOfKinName: users.nextOfKinName,
+        nextOfKinPhone: users.nextOfKinPhone,
+        bankName: users.bankName,
+        bankAccountNumber: users.bankAccountNumber,
+        bankAccountName: users.bankAccountName,
         notes: users.notes,
         lastLoginAt: users.lastLoginAt,
         createdAt: users.createdAt,
@@ -107,9 +160,7 @@ export const usersRouter = createRouter({
           passwordHash: bcrypt.hashSync(input.password, 10),
           fullName: input.fullName.trim(),
           role: input.role,
-          email: input.email || null,
-          phone: input.phone || null,
-          notes: input.notes || null,
+          ...staffValues(input),
           createdBy: ctx.user.id,
         })
         .$returningId();
@@ -145,9 +196,7 @@ export const usersRouter = createRouter({
         .set({
           fullName: input.fullName.trim(),
           role: input.role,
-          email: input.email || null,
-          phone: input.phone || null,
-          notes: input.notes || null,
+          ...staffValues(input),
         })
         .where(eq(users.id, input.id));
 
