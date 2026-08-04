@@ -45,6 +45,10 @@ const REPORTS = [
   { id: "deposits", label: "Deposits" },
   { id: "inventory", label: "Inventory" },
   { id: "movements", label: "Stock movements" },
+  { id: "returns", label: "Returns" },
+  { id: "exchanges", label: "Exchanges" },
+  { id: "payroll", label: "Payroll" },
+  { id: "loans", label: "Staff loans" },
 ] as const;
 type ReportId = (typeof REPORTS)[number]["id"];
 
@@ -906,9 +910,333 @@ function MovementsReport({ range }: { range: Range }) {
   );
 }
 
+/* ------------------------------ RETURNS REPORT ---------------------------- */
+
+const RETURN_STATUS_STYLES: Record<string, string> = {
+  COMPLETED: "border-emerald-600/30 bg-emerald-50 text-emerald-700",
+  PENDING_APPROVAL: "border-amber-600/30 bg-amber-50 text-amber-700",
+  REJECTED: "border-red-600/30 bg-red-50 text-red-700",
+  CANCELLED: "border-[#22264B]/20 bg-[#22264B]/5 text-[#22264B]/50",
+};
+
+function ReturnsReport({ range }: { range: Range }) {
+  const q = trpc.reports.returnsReport.useQuery(range);
+  const rows = q.data?.items;
+
+  const cols: CsvColumn<NonNullable<typeof rows>[number]>[] = [
+    { header: "Reference", value: (r) => r.reference },
+    { header: "Date", value: (r) => formatDateTime(r.createdAt) },
+    { header: "Sale", value: (r) => r.orderNo },
+    { header: "Customer", value: (r) => r.customerName },
+    { header: "Status", value: (r) => r.status },
+    { header: "Items (units)", value: (r) => r.itemQty },
+    { header: "Value", value: (r) => r.totalAmount },
+    { header: "Restocked", value: (r) => (r.restock ? "Yes" : "No") },
+    { header: "Processed by", value: (r) => r.processorName },
+    { header: "Reason", value: (r) => r.reason },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton filename="returns-report.csv" columns={cols} rows={rows} />
+      </div>
+      {q.isLoading ? (
+        <LoadingGrid />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <Stat label="Returns" value={String(q.data?.totals.count ?? 0)} />
+            <Stat label="Completed" value={String(q.data?.totals.completedCount ?? 0)} />
+            <Stat label="Pending approval" value={String(q.data?.totals.pendingCount ?? 0)} />
+            <Stat label="Items returned" value={formatQty(q.data?.totals.totalQty)} />
+            <Stat label="Value credited" value={formatMoney(q.data?.totals.totalValue)} hint="to credit / deposit wallet" />
+          </div>
+          <ReportTable head={["Reference", "Date", "Sale", "Customer", "Status", "Items", "Value", "Restocked", "By"]}>
+            {!rows || rows.length === 0 ? (
+              <EmptyRow cols={9} text="No returns in this range." />
+            ) : (
+              rows.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-semibold text-[#22264B]">{r.reference}</TableCell>
+                  <TableCell className="text-xs">{formatDate(r.createdAt)}</TableCell>
+                  <TableCell className="text-xs">{r.orderNo}</TableCell>
+                  <TableCell>{r.customerName}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={RETURN_STATUS_STYLES[r.status]}>
+                      {r.status.replace(/_/g, " ")}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatQty(r.itemQty)}</TableCell>
+                  <TableCell className="font-semibold">{formatMoney(r.totalAmount)}</TableCell>
+                  <TableCell className="text-xs">{r.restock ? "Yes" : "No"}</TableCell>
+                  <TableCell className="text-xs">{r.processorName}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </ReportTable>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ----------------------------- EXCHANGES REPORT --------------------------- */
+
+const SETTLEMENT_REPORT_LABELS: Record<string, string> = {
+  NONE: "Even swap",
+  TOPUP_CASH: "Top-up · Cash",
+  TOPUP_TRANSFER: "Top-up · Transfer",
+  TOPUP_POS: "Top-up · POS",
+  TOPUP_CHEQUE: "Top-up · Cheque",
+  TOPUP_DEPOSIT: "Top-up · Deposit",
+  TOPUP_CREDIT: "Top-up · Credit",
+  TO_DEPOSIT: "Balance → deposit",
+};
+
+function ExchangesReport({ range }: { range: Range }) {
+  const q = trpc.reports.exchangesReport.useQuery(range);
+  const rows = q.data?.items;
+
+  const cols: CsvColumn<NonNullable<typeof rows>[number]>[] = [
+    { header: "Reference", value: (r) => r.reference },
+    { header: "Date", value: (r) => formatDateTime(r.createdAt) },
+    { header: "Sale", value: (r) => r.orderNo },
+    { header: "Customer", value: (r) => r.customerName },
+    { header: "Status", value: (r) => r.status },
+    { header: "Returned value", value: (r) => r.returnedTotal },
+    { header: "New value", value: (r) => r.newTotal },
+    { header: "Difference", value: (r) => r.difference },
+    { header: "Settlement", value: (r) => SETTLEMENT_REPORT_LABELS[r.settlementType] ?? r.settlementType },
+    { header: "Processed by", value: (r) => r.processorName },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton filename="exchanges-report.csv" columns={cols} rows={rows} />
+      </div>
+      {q.isLoading ? (
+        <LoadingGrid />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Exchanges" value={String(q.data?.totals.count ?? 0)} hint={`${q.data?.totals.pendingCount ?? 0} pending approval`} />
+            <Stat label="Returned value" value={formatMoney(q.data?.totals.returnedValue)} />
+            <Stat label="New items value" value={formatMoney(q.data?.totals.newValue)} />
+            <Stat label="Top-ups collected" value={formatMoney(q.data?.totals.topupsCollected)} hint={`To deposit wallets: ${formatMoney(q.data?.totals.creditedToDeposits)}`} />
+          </div>
+          <ReportTable head={["Reference", "Date", "Sale", "Customer", "Status", "Returned", "New", "Difference", "Settlement"]}>
+            {!rows || rows.length === 0 ? (
+              <EmptyRow cols={9} text="No exchanges in this range." />
+            ) : (
+              rows.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-semibold text-[#22264B]">{r.reference}</TableCell>
+                  <TableCell className="text-xs">{formatDate(r.createdAt)}</TableCell>
+                  <TableCell className="text-xs">{r.orderNo}</TableCell>
+                  <TableCell>{r.customerName}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={RETURN_STATUS_STYLES[r.status]}>
+                      {r.status.replace(/_/g, " ")}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatMoney(r.returnedTotal)}</TableCell>
+                  <TableCell>{formatMoney(r.newTotal)}</TableCell>
+                  <TableCell className={`font-semibold ${Number(r.difference) > 0 ? "text-amber-700" : Number(r.difference) < 0 ? "text-emerald-700" : ""}`}>
+                    {Number(r.difference) > 0 ? "+" : ""}{formatMoney(r.difference)}
+                  </TableCell>
+                  <TableCell className="text-xs">{SETTLEMENT_REPORT_LABELS[r.settlementType] ?? r.settlementType}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </ReportTable>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ PAYROLL REPORT ---------------------------- */
+
+const SALARY_STATUS_STYLES: Record<string, string> = {
+  PAID: "border-emerald-600/30 bg-emerald-50 text-emerald-700",
+  PENDING: "border-amber-600/30 bg-amber-50 text-amber-700",
+  CANCELLED: "border-red-600/30 bg-red-50 text-red-700",
+};
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function PayrollReport() {
+  const now = new Date();
+  const [year, setYear] = useState(String(now.getFullYear()));
+  const [month, setMonth] = useState("ALL");
+  const q = trpc.reports.payrollReport.useQuery({
+    year: Number(year),
+    month: month === "ALL" ? undefined : Number(month),
+  });
+  const rows = q.data?.items;
+
+  const cols: CsvColumn<NonNullable<typeof rows>[number]>[] = [
+    { header: "Reference", value: (r) => r.reference },
+    { header: "Staff", value: (r) => r.staffName },
+    { header: "Period", value: (r) => `${r.periodYear}-${String(r.periodMonth).padStart(2, "0")}` },
+    { header: "Gross", value: (r) => r.grossPay },
+    { header: "Tax", value: (r) => r.taxAmount },
+    { header: "Pension", value: (r) => r.pensionAmount },
+    { header: "VAT", value: (r) => r.vatAmount },
+    { header: "Loan deduction", value: (r) => r.loanDeduction },
+    { header: "Other deductions", value: (r) => r.otherDeduction },
+    { header: "Net pay", value: (r) => r.netPay },
+    { header: "Status", value: (r) => r.status },
+    { header: "Method", value: (r) => r.paymentMethod },
+    { header: "Payment ref", value: (r) => r.paymentReference },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-2">
+          <Select value={year} onValueChange={setYear}>
+            <SelectTrigger className="h-8 w-[110px] bg-white text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2].map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={month} onValueChange={setMonth}>
+            <SelectTrigger className="h-8 w-[130px] bg-white text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All months</SelectItem>
+              {MONTH_NAMES.map((m, i) => (
+                <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <ExportButton filename="payroll-report.csv" columns={cols} rows={rows} />
+      </div>
+      {q.isLoading ? (
+        <LoadingGrid />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Payslips paid" value={String(q.data?.totals.paidCount ?? 0)} hint={`${q.data?.totals.pendingCount ?? 0} pending`} />
+            <Stat label="Gross pay" value={formatMoney(q.data?.totals.gross)} />
+            <Stat label="Deductions" value={formatMoney((q.data?.totals.tax ?? 0) + (q.data?.totals.pension ?? 0) + (q.data?.totals.vat ?? 0) + (q.data?.totals.loanDeductions ?? 0) + (q.data?.totals.otherDeductions ?? 0))} hint={`Loan recoveries: ${formatMoney(q.data?.totals.loanDeductions)}`} />
+            <Stat label="Net paid" value={formatMoney(q.data?.totals.netPaid)} />
+          </div>
+          <ReportTable head={["Reference", "Staff", "Period", "Gross", "Loan ded.", "Net pay", "Status", "Method"]}>
+            {!rows || rows.length === 0 ? (
+              <EmptyRow cols={8} text="No salary payments for this period." />
+            ) : (
+              rows.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-semibold text-[#22264B]">{r.reference}</TableCell>
+                  <TableCell>
+                    <span className="block font-semibold text-[#22264B]">{r.staffName}</span>
+                    <span className="text-xs text-[#22264B]/50">{r.staffCode ?? ""}</span>
+                  </TableCell>
+                  <TableCell className="text-xs">{MONTH_NAMES[r.periodMonth - 1]} {r.periodYear}</TableCell>
+                  <TableCell>{formatMoney(r.grossPay)}</TableCell>
+                  <TableCell className="text-xs">{Number(r.loanDeduction) > 0 ? formatMoney(r.loanDeduction) : "—"}</TableCell>
+                  <TableCell className="font-semibold">{formatMoney(r.netPay)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={SALARY_STATUS_STYLES[r.status]}>{r.status}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">{r.paymentMethod ? r.paymentMethod.replace(/_/g, " ") : "—"}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </ReportTable>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------- LOANS REPORT ----------------------------- */
+
+const LOAN_STATUS_STYLES: Record<string, string> = {
+  ACTIVE: "border-emerald-600/30 bg-emerald-50 text-emerald-700",
+  PAID_OFF: "border-[#22264B]/20 bg-[#22264B]/5 text-[#22264B]",
+  PENDING: "border-amber-600/30 bg-amber-50 text-amber-700",
+  REJECTED: "border-red-600/30 bg-red-50 text-red-700",
+  CANCELLED: "border-[#22264B]/20 bg-[#22264B]/5 text-[#22264B]/50",
+};
+
+function LoansReport() {
+  const q = trpc.reports.loansReport.useQuery();
+  const rows = q.data?.items;
+
+  const cols: CsvColumn<NonNullable<typeof rows>[number]>[] = [
+    { header: "Reference", value: (r) => r.reference },
+    { header: "Staff", value: (r) => r.staffName },
+    { header: "Amount", value: (r) => r.amount },
+    { header: "Term (months)", value: (r) => r.termMonths },
+    { header: "Monthly deduction", value: (r) => r.monthlyDeduction },
+    { header: "Repaid", value: (r) => r.amountRepaid },
+    { header: "Remaining", value: (r) => r.remainingBalance },
+    { header: "Starts", value: (r) => `${r.startYear}-${String(r.startMonth).padStart(2, "0")}` },
+    { header: "Status", value: (r) => r.status },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <ExportButton filename="staff-loans-report.csv" columns={cols} rows={rows} />
+      </div>
+      {q.isLoading ? (
+        <LoadingGrid />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Active loans" value={String(q.data?.totals.activeCount ?? 0)} hint={`${q.data?.totals.count ?? 0} total`} />
+            <Stat label="Total disbursed" value={formatMoney(q.data?.totals.disbursed)} />
+            <Stat label="Recovered" value={formatMoney(q.data?.totals.recovered)} />
+            <Stat label="Outstanding" value={formatMoney(q.data?.totals.outstanding)} />
+          </div>
+          <ReportTable head={["Reference", "Staff", "Amount", "Monthly", "Repaid", "Remaining", "Starts", "Status"]}>
+            {!rows || rows.length === 0 ? (
+              <EmptyRow cols={8} text="No staff loans yet." />
+            ) : (
+              rows.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-semibold text-[#22264B]">{r.reference}</TableCell>
+                  <TableCell>
+                    <span className="block font-semibold text-[#22264B]">{r.staffName}</span>
+                    <span className="text-xs text-[#22264B]/50">{r.staffCode ?? ""}</span>
+                  </TableCell>
+                  <TableCell>{formatMoney(r.amount)}</TableCell>
+                  <TableCell className="text-xs">{formatMoney(r.monthlyDeduction)} × {r.termMonths}</TableCell>
+                  <TableCell className="text-emerald-700">{formatMoney(r.amountRepaid)}</TableCell>
+                  <TableCell className={Number(r.remainingBalance) > 0 ? "font-semibold text-amber-700" : ""}>
+                    {formatMoney(r.remainingBalance)}
+                  </TableCell>
+                  <TableCell className="text-xs">{MONTH_NAMES[r.startMonth - 1]} {r.startYear}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={LOAN_STATUS_STYLES[r.status]}>
+                      {r.status.replace(/_/g, " ")}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </ReportTable>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* --------------------------------- SHELL ---------------------------------- */
 
-const RANGED_REPORTS: ReportId[] = ["sales", "products", "reps", "payments", "expenses", "profit", "movements"];
+const RANGED_REPORTS: ReportId[] = ["sales", "products", "reps", "payments", "expenses", "profit", "movements", "returns", "exchanges"];
 
 export default function Reports() {
   const [report, setReport] = useState<ReportId>("sales");
@@ -926,6 +1254,10 @@ export default function Reports() {
       case "deposits": return <DepositsReport />;
       case "inventory": return <InventoryReport />;
       case "movements": return <MovementsReport range={range} />;
+      case "returns": return <ReturnsReport range={range} />;
+      case "exchanges": return <ExchangesReport range={range} />;
+      case "payroll": return <PayrollReport />;
+      case "loans": return <LoansReport />;
     }
   }, [report, range]);
 
