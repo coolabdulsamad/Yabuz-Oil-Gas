@@ -20,6 +20,7 @@ import Customers from "@/pages/Customers";
 import CustomerDetail from "@/pages/CustomerDetail";
 import Credit from "@/pages/Credit";
 import Deposits from "@/pages/Deposits";
+import Money from "@/pages/Money";
 import Sales from "@/pages/Sales";
 import NewSale from "@/pages/NewSale";
 import SaleDetail from "@/pages/SaleDetail";
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/payments" element={<Payments />} />
           <Route path="/credit" element={<Credit />} />
           <Route path="/deposits" element={<Deposits />} />
+          <Route path="/money" element={<Money />} />
           <Route path="/returns" element={<Returns />} />
           <Route path="/exchanges" element={<Exchanges />} />
           <Route path="/salary" element={<Salary />} />
