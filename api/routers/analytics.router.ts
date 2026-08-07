@@ -16,6 +16,7 @@ import {
   staffLoans,
   users,
 } from "@db/schema";
+import { listMoneyMovements, summarizeMovements } from "../services/money.service";
 
 /**
  * YABUZ OIL & GAS — analytics router
@@ -305,4 +306,27 @@ export const analyticsRouter = createRouter({
       creditLimit: Number(r.creditLimit),
     }));
   }),
+
+  /* ---------------------- MONEY FLOW (REAL CASH/BANK) ---------------------- */
+
+  moneyFlow: permissionProcedure("analytics.view")
+    .input(rangeInput)
+    .query(async ({ input }) => {
+      const db = getDb();
+      const { from, to } = bounds(input ?? undefined);
+      const rows = await listMoneyMovements(db, {
+        dateFrom: from.toISOString().slice(0, 10),
+        dateTo: to.toISOString().slice(0, 10),
+      });
+      const summary = summarizeMovements(rows);
+      const byDay = new Map<string, { day: string; in: number; out: number }>();
+      for (const r of rows) {
+        const day = r.date.slice(0, 10);
+        const b = byDay.get(day) ?? { day, in: 0, out: 0 };
+        if (r.direction === "IN") b.in += r.amount;
+        else b.out += r.amount;
+        byDay.set(day, b);
+      }
+      return { summary, daily: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)) };
+    }),
 });
