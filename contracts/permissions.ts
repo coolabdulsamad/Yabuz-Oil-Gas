@@ -40,6 +40,10 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: "loans.view", label: "View staff loans", group: "Payroll & Loans", description: "See staff loans, balances and deduction schedules." },
   { key: "loans.manage", label: "Manage staff loans", group: "Payroll & Loans", description: "Grant loans to staff and manage salary-deduction repayment (Admin & Super Admin only)." },
 
+  // ---- MONEY MOVEMENTS ----
+  { key: "money.view", label: "View money movements", group: "Money Movements", description: "See the cash & bank page — all real money in/out with balances and history." },
+  { key: "money.manage", label: "Record other money movements", group: "Money Movements", description: "Record other money-in / money-out entries (non-sale, non-expense) and remove mistaken ones." },
+
   // ---- PAYMENTS ----
   { key: "payments.view", label: "View payments", group: "Payments", description: "Open the payments module." },
   { key: "payments.view_all", label: "View all payments", group: "Payments", description: "See payments recorded by all staff." },
@@ -139,6 +143,8 @@ const MANAGER_DEFAULTS = [
   "sales.cancel",
   "payments.view_all",
   "payments.confirm",
+  "money.view",
+  "money.manage",
   "credit.manage",
   "deposits.refund",
   "products.create",
