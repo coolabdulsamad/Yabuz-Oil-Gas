@@ -73,6 +73,7 @@ function NewLoanDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
   const [approveNow, setApproveNow] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState("BANK_TRANSFER");
 
   const monthly = amount > 0 && termMonths > 0 ? amount / termMonths : 0;
   const staff = (staffQuery.data ?? []).filter((s) => s.status === "ACTIVE");
@@ -90,7 +91,7 @@ function NewLoanDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
     if (!userId) return toast.error("Pick a staff member.");
     if (amount <= 0) return toast.error("Enter the loan amount.");
     if (reason.trim().length < 3) return toast.error("Give a reason for the loan.");
-    create.mutate({ userId, amount, termMonths, startYear, startMonth, reason: reason.trim(), notes: notes.trim() || undefined, approveNow });
+    create.mutate({ userId, amount, termMonths, startYear, startMonth, reason: reason.trim(), notes: notes.trim() || undefined, approveNow, paymentMethod: paymentMethod as "CASH" | "BANK_TRANSFER" | "POS" | "CHEQUE" });
   }
 
   return (
@@ -153,6 +154,20 @@ function NewLoanDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
               <span className="block text-xs font-normal text-[#22264B]/50">Books a "Staff Loans" expense immediately</span>
             </Label>
           </div>
+          {approveNow && (
+            <div className="space-y-1">
+              <Label>Disburse via</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
+                  <SelectItem value="CASH">Cash</SelectItem>
+                  <SelectItem value="POS">POS</SelectItem>
+                  <SelectItem value="CHEQUE">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="flex items-center justify-between rounded-xl bg-[#22264B] px-4 py-3 text-white">
             <span className="text-sm font-medium">Monthly deduction</span>
             <span className="text-lg font-black text-[#F7A026]">{formatMoney(monthly)}</span>
@@ -179,6 +194,7 @@ function LoanDetail({ id, onClose, onChanged }: { id: number; onClose: () => voi
   const d = q.data;
   const [repayOpen, setRepayOpen] = useState(false);
   const [repayAmount, setRepayAmount] = useState(0);
+  const [approveMethod, setApproveMethod] = useState("BANK_TRANSFER");
   const now = new Date();
 
   const approve = trpc.loans.approve.useMutation({
@@ -296,10 +312,21 @@ function LoanDetail({ id, onClose, onChanged }: { id: number; onClose: () => voi
             {canManage && (
               <div className="flex justify-end gap-2">
                 {d.loan.status === "PENDING" && (
-                  <Button onClick={() => approve.mutate({ loanId: d.loan.id })} disabled={approve.isPending}>
-                    {approve.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
-                    Approve & disburse
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Select value={approveMethod} onValueChange={setApproveMethod}>
+                      <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
+                        <SelectItem value="CASH">Cash</SelectItem>
+                        <SelectItem value="POS">POS</SelectItem>
+                        <SelectItem value="CHEQUE">Cheque</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={() => approve.mutate({ loanId: d.loan.id, paymentMethod: approveMethod as "CASH" | "BANK_TRANSFER" | "POS" | "CHEQUE" })} disabled={approve.isPending}>
+                      {approve.isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+                      Approve & disburse
+                    </Button>
+                  </div>
                 )}
                 {d.loan.status === "ACTIVE" && (
                   <Button variant="outline" onClick={() => { setRepayAmount(Math.min(d.loan.monthlyDeduction, d.loan.remainingBalance)); setRepayOpen(true); }}>
