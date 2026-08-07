@@ -39,6 +39,7 @@ const REPORTS = [
   { id: "products", label: "Product sales" },
   { id: "reps", label: "Sales by rep" },
   { id: "payments", label: "Payments" },
+  { id: "money", label: "Money movements" },
   { id: "expenses", label: "Expenses" },
   { id: "profit", label: "Profit & loss" },
   { id: "credit", label: "Credit" },
@@ -1234,9 +1235,118 @@ function LoansReport() {
   );
 }
 
+/* --------------------------- MONEY MOVEMENTS REPORT --------------------------- */
+
+const MONEY_METHOD_LABELS: Record<string, string> = {
+  CASH: "Cash",
+  BANK_TRANSFER: "Bank transfer",
+  POS: "POS",
+  CHEQUE: "Cheque",
+};
+const MONEY_SOURCE_LABELS: Record<string, string> = {
+  SALE_PAYMENT: "Sale payments",
+  CREDIT_PAYMENT: "Credit repayments",
+  ADVANCE_DEPOSIT: "Advance deposits",
+  OTHER_IN: "Other income",
+  EXPENSE: "Expenses",
+  SALARY: "Salaries",
+  LOAN: "Staff loans",
+  DEPOSIT_REFUND: "Deposit refunds",
+  OTHER_OUT: "Other payouts",
+};
+
+function MoneyReport({ range }: { range: Range }) {
+  const q = trpc.reports.moneyMovementsReport.useQuery(range);
+  const rows = q.data?.rows;
+  const s = q.data?.summary;
+
+  type Row = NonNullable<typeof rows>[number];
+  const cols: CsvColumn<Row>[] = [
+    { header: "Date", value: (r) => formatDateTime(r.date) },
+    { header: "Reference", value: (r) => r.reference },
+    { header: "Direction", value: (r) => r.direction },
+    { header: "Source", value: (r) => MONEY_SOURCE_LABELS[r.source] ?? r.source },
+    { header: "Method", value: (r) => MONEY_METHOD_LABELS[r.method] ?? r.method },
+    { header: "Party", value: (r) => r.party ?? "" },
+    { header: "Description", value: (r) => r.description },
+    { header: "Amount", value: (r) => r.amount.toFixed(2) },
+    { header: "Recorded by", value: (r) => r.recordedBy ?? "" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-[#22264B]/50">
+          Real money only — credit sales and deposit-wallet usage are excluded.
+        </p>
+        <ExportButton filename="money-movements-report.csv" columns={cols} rows={rows} />
+      </div>
+      {q.isLoading ? (
+        <LoadingGrid />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Money in" value={formatMoney(s?.totalIn)} />
+            <Stat label="Money out" value={formatMoney(s?.totalOut)} />
+            <Stat label="Net flow" value={formatMoney(s?.net)} />
+            <Stat label="Transactions" value={String(s?.count ?? 0)} />
+          </div>
+
+          <ReportTable head={["Method", "In", "Out", "Balance"]}>
+            {(s?.methods ?? []).map((m) => (
+              <TableRow key={m.method}>
+                <TableCell className="font-semibold text-[#22264B]">{MONEY_METHOD_LABELS[m.method]}</TableCell>
+                <TableCell className="text-emerald-700">{formatMoney(m.in)}</TableCell>
+                <TableCell className="text-red-700">{formatMoney(m.out)}</TableCell>
+                <TableCell className={`font-bold ${m.balance >= 0 ? "text-[#22264B]" : "text-red-600"}`}>
+                  {formatMoney(m.balance)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </ReportTable>
+
+          <ReportTable head={["Source", "Direction", "Total", "Count"]}>
+            {(s?.sources ?? []).map((x) => (
+              <TableRow key={x.source}>
+                <TableCell className="font-semibold text-[#22264B]">{MONEY_SOURCE_LABELS[x.source] ?? x.source}</TableCell>
+                <TableCell className={x.direction === "IN" ? "text-emerald-700" : "text-red-700"}>
+                  {x.direction === "IN" ? "In" : "Out"}
+                </TableCell>
+                <TableCell>{formatMoney(x.total)}</TableCell>
+                <TableCell>{x.count}</TableCell>
+              </TableRow>
+            ))}
+          </ReportTable>
+
+          <ReportTable head={["Date", "Reference", "Source", "Method", "Party / details", "In", "Out"]}>
+            {!rows || rows.length === 0 ? (
+              <EmptyRow cols={7} text="No money movements in this range." />
+            ) : (
+              rows.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="text-xs whitespace-nowrap">{formatDateTime(r.date)}</TableCell>
+                  <TableCell className="font-mono text-xs font-semibold text-[#22264B]">{r.reference}</TableCell>
+                  <TableCell className="text-xs">{MONEY_SOURCE_LABELS[r.source] ?? r.source}</TableCell>
+                  <TableCell className="text-xs">{MONEY_METHOD_LABELS[r.method] ?? r.method}</TableCell>
+                  <TableCell className="max-w-xs">
+                    <span className="block truncate text-xs">{r.party ?? "—"}</span>
+                    {r.description && <span className="block truncate text-xs text-[#22264B]/45">{r.description}</span>}
+                  </TableCell>
+                  <TableCell className="text-emerald-700">{r.direction === "IN" ? formatMoney(r.amount) : ""}</TableCell>
+                  <TableCell className="text-red-700">{r.direction === "OUT" ? formatMoney(r.amount) : ""}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </ReportTable>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* --------------------------------- SHELL ---------------------------------- */
 
-const RANGED_REPORTS: ReportId[] = ["sales", "products", "reps", "payments", "expenses", "profit", "movements", "returns", "exchanges"];
+const RANGED_REPORTS: ReportId[] = ["sales", "products", "reps", "payments", "money", "expenses", "profit", "movements", "returns", "exchanges"];
 
 export default function Reports() {
   const [report, setReport] = useState<ReportId>("sales");
@@ -1248,6 +1358,7 @@ export default function Reports() {
       case "products": return <ProductSalesReport range={range} />;
       case "reps": return <RepSalesReport range={range} />;
       case "payments": return <PaymentsReport range={range} />;
+      case "money": return <MoneyReport range={range} />;
       case "expenses": return <ExpensesReport range={range} />;
       case "profit": return <ProfitReport range={range} />;
       case "credit": return <CreditReport />;
