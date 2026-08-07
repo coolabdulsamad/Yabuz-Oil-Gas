@@ -59,6 +59,7 @@ function RecordExpenseDialog({ open, onClose }: { open: boolean; onClose: () => 
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [vendor, setVendor] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [receipt, setReceipt] = useState<ProofValue | null>(null);
 
@@ -70,6 +71,7 @@ function RecordExpenseDialog({ open, onClose }: { open: boolean; onClose: () => 
       setAmount("");
       setDescription("");
       setVendor("");
+      setPaymentMethod("CASH");
       setExpenseDate(new Date().toISOString().slice(0, 10));
       setReceipt(null);
     }
@@ -96,6 +98,7 @@ function RecordExpenseDialog({ open, onClose }: { open: boolean; onClose: () => 
       amount: amt,
       description: description.trim(),
       vendor: vendor.trim() || undefined,
+      paymentMethod: paymentMethod as "CASH" | "BANK_TRANSFER" | "POS" | "CHEQUE",
       expenseDate,
       receiptUrl: receipt?.url,
       receiptPublicId: receipt?.publicId,
@@ -140,6 +143,22 @@ function RecordExpenseDialog({ open, onClose }: { open: boolean; onClose: () => 
               <Label>Vendor (optional)</Label>
               <Input value={vendor} onChange={(e) => setVendor(e.target.value)} className="mt-1.5" placeholder="Who was paid?" />
             </div>
+            <div>
+              <Label>Paid via</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">Cash</SelectItem>
+                  <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
+                  <SelectItem value="POS">POS</SelectItem>
+                  <SelectItem value="CHEQUE">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Expense date</Label>
               <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="mt-1.5" />
@@ -261,7 +280,7 @@ export default function Expenses() {
           <p className="text-sm text-[#22264B]/55">Company spending with receipts, through the approval chain.</p>
         </div>
         {canCreate && (
-          <Button className="bg-[#F7A026] font-bold text-[#22264B] hover:bg-[#e0901c]" onClick={() => setRecordOpen(true)}>
+          <Button className="bg-[#F7A026] font-bold text-[#22264B] hover:bg-[#e0901c]}" onClick={() => setRecordOpen(true)}>
             <Plus className="mr-1 size-4" /> Record expense
           </Button>
         )}
@@ -331,7 +350,12 @@ export default function Expenses() {
                         <span className="block truncate text-xs text-red-600">{e.rejectedReason}</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">{e.vendor ?? "—"}</TableCell>
+                    <TableCell className="text-sm">
+                      {e.vendor ?? "—"}
+                      <span className="block text-xs text-[#22264B]/45">
+                        {(e.paymentMethod ?? "CASH").toLowerCase().replace("_", " ")}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right font-bold text-[#22264B]">{formatMoney(e.amount)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={STATUS_STYLES[e.status]}>
