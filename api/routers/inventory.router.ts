@@ -337,7 +337,7 @@ export const inventoryRouter = createRouter({
       }
 
       const active = await db
-        .select({ id: products.id, currentStock: products.currentStock })
+        .select({ id: products.id, currentStock: products.currentStock, sellUnitPrice: products.sellUnitPrice })
         .from(products)
         .where(eq(products.status, "ACTIVE"));
 
@@ -353,6 +353,7 @@ export const inventoryRouter = createRouter({
             countId: id,
             productId: p.id,
             expectedQty: p.currentStock,
+            unitPrice: p.sellUnitPrice,
           });
         }
         return id;
@@ -397,6 +398,8 @@ export const inventoryRouter = createRouter({
           expectedQty: stockCountItems.expectedQty,
           countedQty: stockCountItems.countedQty,
           variance: stockCountItems.variance,
+          unitPrice: stockCountItems.unitPrice,
+          productSellUnitPrice: products.sellUnitPrice, // fallback for counts started before pricing
           notes: stockCountItems.notes,
           productName: products.name,
           sku: products.sku,
