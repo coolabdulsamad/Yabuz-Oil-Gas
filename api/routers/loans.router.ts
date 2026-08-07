@@ -12,7 +12,7 @@ import {
   staffLoans,
   users,
 } from "@db/schema";
-import { LOAN_STATUSES } from "@contracts/constants";
+import { LOAN_STATUSES, MONEY_METHODS } from "@contracts/constants";
 import { logAudit, requestMeta } from "../services/audit.service";
 
 /**
@@ -124,6 +124,8 @@ export const loansRouter = createRouter({
         notes: z.string().trim().max(2000).optional(),
         /** Approve & disburse immediately (default true — admins act directly). */
         approveNow: z.boolean().default(true),
+        /** How the loan money leaves the company when disbursed. */
+        paymentMethod: z.enum(MONEY_METHODS).default("BANK_TRANSFER"),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -188,6 +190,7 @@ export const loansRouter = createRouter({
               amount: input.amount,
               description: `Staff loan ${reference} — ${staff.fullName} · repay ₦${monthlyDeduction.toLocaleString()}/month × ${input.termMonths} from ${monthLabel(input.startYear, input.startMonth)}`,
               vendor: staff.fullName,
+              paymentMethod: input.paymentMethod,
               expenseDate: new Date(),
               status: "APPROVED",
               createdBy: ctx.user.id,
@@ -220,7 +223,12 @@ export const loansRouter = createRouter({
 
   /** Approve & disburse a PENDING loan. */
   approve: permissionProcedure("loans.manage")
-    .input(z.object({ loanId: z.number().int().positive() }))
+    .input(
+      z.object({
+        loanId: z.number().int().positive(),
+        paymentMethod: z.enum(MONEY_METHODS).default("BANK_TRANSFER"),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const [loan] = await db.select().from(staffLoans).where(eq(staffLoans.id, input.loanId)).limit(1);
@@ -239,6 +247,7 @@ export const loansRouter = createRouter({
             amount: loan.amount,
             description: `Staff loan ${loan.reference} — ${staff?.fullName ?? ""} · repay ₦${loan.monthlyDeduction.toLocaleString()}/month × ${loan.termMonths} from ${monthLabel(loan.startYear, loan.startMonth)}`,
             vendor: staff?.fullName ?? null,
+            paymentMethod: input.paymentMethod,
             expenseDate: new Date(),
             status: "APPROVED",
             createdBy: ctx.user.id,
