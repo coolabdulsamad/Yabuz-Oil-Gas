@@ -76,9 +76,7 @@ export async function recordPaymentWithApproval(
   if (input.method === "DEPOSIT_BALANCE") {
     throw new TRPCError({ code: "BAD_REQUEST", message: "To pay from a deposit wallet, create the sale with the deposit settlement mode instead." });
   }
-  if (input.method !== "CASH" && !input.proofUrl) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Attach a payment proof (receipt / transfer screenshot) — required for non-cash payments." });
-  }
+  // Proof is optional for every method — attach it when you have it.
 
   let customerName: string | null = null;
   let orderNo: string | null = null;
