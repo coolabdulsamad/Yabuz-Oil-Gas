@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { ArrowLeft, CheckCircle2, Search, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Printer, Search, TrendingDown, TrendingUp, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
-import { formatDateTime, formatQty } from "@/lib/format";
+import { formatDateTime, formatMoney, formatQty } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,14 +31,17 @@ import {
 /**
  * YABUZ OIL & GAS — stock count detail.
  * Enter physical counts per product; variances apply as COUNT_ADJUST
- * ledger movements when the count is completed.
+ * ledger movements when the count is completed. Every line is valued at
+ * the selling unit price captured when the count started, so shortages
+ * and surpluses show their full money value (chargeable to staff) and
+ * the whole sheet is printable once completed.
  */
 
 export default function StockCountDetail() {
   const { id } = useParams();
   const countId = Number(id);
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const canCount = hasPermission("inventory.stock_count");
 
   const [search, setSearch] = useState("");
@@ -89,6 +92,9 @@ export default function StockCountDetail() {
     return <p className="text-sm text-[#22264B]/60">Stock count not found.</p>;
   }
 
+  /** Unit price for valuation — snapshot first, live product price as fallback. */
+  const priceOf = (i: (typeof data.items)[number]) => i.unitPrice ?? i.productSellUnitPrice ?? 0;
+
   // Edited value wins; otherwise show the saved counted qty.
   const valueFor = (itemId: number, counted: number | null) =>
     entries[itemId] ?? (counted != null ? String(counted) : "");
@@ -103,8 +109,34 @@ export default function StockCountDetail() {
     ? data.items.filter((i) => i.productName.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q))
     : data.items;
 
-  const countedTotal = data.items.filter((i) => i.countedQty !== null).length;
+  /** Effective counted qty per item (live-typed value wins for instant totals). */
+  const effectiveCounted = (i: (typeof data.items)[number]): number | null => {
+    const entered = entries[i.id];
+    if (entered !== undefined && entered !== "" && Number.isFinite(Number(entered))) return Number(entered);
+    return i.countedQty;
+  };
+
+  const countedTotal = data.items.filter((i) => effectiveCounted(i) !== null).length;
   const varianceTotal = data.items.reduce((s, i) => s + (i.variance ?? 0), 0);
+
+  /* ---- money totals over ALL items (not just the filtered view) ---- */
+  const totals = data.items.reduce(
+    (acc, i) => {
+      const price = priceOf(i);
+      const counted = effectiveCounted(i);
+      acc.expectedValue += i.expectedQty * price;
+      if (counted !== null) {
+        acc.countedValue += counted * price;
+        const v = counted - i.expectedQty;
+        const vv = v * price;
+        acc.varianceValue += vv;
+        if (vv < 0) acc.shortageValue += -vv;
+        if (vv > 0) acc.surplusValue += vv;
+      }
+      return acc;
+    },
+    { expectedValue: 0, countedValue: 0, varianceValue: 0, shortageValue: 0, surplusValue: 0 },
+  );
 
   const statusStyle =
     data.status === "IN_PROGRESS"
@@ -115,7 +147,7 @@ export default function StockCountDetail() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div className="flex items-center gap-3">
           <Button asChild variant="outline" size="icon">
             <Link to="/inventory">
@@ -135,82 +167,125 @@ export default function StockCountDetail() {
             </p>
           </div>
         </div>
-        {editable && (
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (dirtyItems.length === 0) {
-                  toast.error("Enter at least one counted quantity first.");
-                  return;
-                }
-                save.mutate({ countId, items: dirtyItems });
-              }}
-              disabled={save.isPending}
-            >
-              {save.isPending ? "Saving…" : `Save Entries (${dirtyItems.length})`}
-            </Button>
-            <Button
-              onClick={() => setConfirmComplete(true)}
-              className="bg-[#22264B] text-white hover:bg-[#22264B]/90"
-            >
-              <CheckCircle2 className="size-4" /> Complete Count
-            </Button>
-            <Button variant="outline" onClick={() => setConfirmCancel(true)}>
-              <XCircle className="size-4" /> Cancel
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.print()}>
+            <Printer className="size-4" /> Print
+          </Button>
+          {editable && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (dirtyItems.length === 0) {
+                    toast.error("Enter at least one counted quantity first.");
+                    return;
+                  }
+                  save.mutate({ countId, items: dirtyItems });
+                }}
+                disabled={save.isPending}
+              >
+                {save.isPending ? "Saving…" : `Save Entries (${dirtyItems.length})`}
+              </Button>
+              <Button
+                onClick={() => setConfirmComplete(true)}
+                className="bg-[#22264B] text-white hover:bg-[#22264B]/90"
+              >
+                <CheckCircle2 className="size-4" /> Complete Count
+              </Button>
+              <Button variant="outline" onClick={() => setConfirmCancel(true)}>
+                <XCircle className="size-4" /> Cancel
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
+      {/* ---- valuation summary cards ---- */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 print:hidden">
+        <div className="rounded-xl border border-[#22264B]/10 bg-white p-4 shadow-sm">
+          <p className="text-[11px] font-bold tracking-widest text-[#22264B]/45 uppercase">Expected value</p>
+          <p className="mt-1 text-lg font-black text-[#22264B]">{formatMoney(totals.expectedValue)}</p>
+          <p className="text-xs text-[#22264B]/45">{countedTotal} of {data.items.length} counted</p>
+        </div>
+        <div className="rounded-xl border border-[#22264B]/10 bg-white p-4 shadow-sm">
+          <p className="text-[11px] font-bold tracking-widest text-[#22264B]/45 uppercase">Counted value</p>
+          <p className="mt-1 text-lg font-black text-[#22264B]">{formatMoney(totals.countedValue)}</p>
+        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50/60 p-4 shadow-sm">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-widest text-red-700/70 uppercase">
+            <TrendingDown className="size-3.5" /> Shortage value
+          </div>
+          <p className="mt-1 text-lg font-black text-red-600">{formatMoney(totals.shortageValue)}</p>
+          <p className="text-xs text-red-600/60">chargeable to staff</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-widest text-emerald-700/70 uppercase">
+            <TrendingUp className="size-3.5" /> Surplus value
+          </div>
+          <p className="mt-1 text-lg font-black text-emerald-600">{formatMoney(totals.surplusValue)}</p>
+        </div>
+        <div className="rounded-xl border border-[#22264B]/10 bg-white p-4 shadow-sm">
+          <p className="text-[11px] font-bold tracking-widest text-[#22264B]/45 uppercase">Net variance</p>
+          <p className={`mt-1 text-lg font-black ${totals.varianceValue < 0 ? "text-red-600" : totals.varianceValue > 0 ? "text-emerald-600" : "text-[#22264B]"}`}>
+            {totals.varianceValue < 0 ? "−" : totals.varianceValue > 0 ? "+" : ""}{formatMoney(Math.abs(totals.varianceValue))}
+          </p>
+          {varianceTotal !== 0 && (
+            <p className={varianceTotal > 0 ? "text-xs text-emerald-600" : "text-xs text-red-600"}>
+              {varianceTotal > 0 ? "+" : ""}{formatQty(varianceTotal)} packs
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 print:hidden">
         <div className="relative w-full max-w-xs">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#22264B]/40" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product…" className="pl-9" />
         </div>
-        <p className="text-sm text-[#22264B]/55">
-          {countedTotal} of {data.items.length} counted
-          {varianceTotal !== 0 && (
-            <span className={varianceTotal > 0 ? "text-emerald-600" : "text-red-600"}>
-              {" "}· net variance {varianceTotal > 0 ? "+" : ""}
-              {formatQty(varianceTotal)} packs
-            </span>
-          )}
-        </p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#22264B]/10 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-[#22264B]/10 bg-white shadow-sm print:hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-[#22264B]/[0.03]">
               <TableHead>Product</TableHead>
+              <TableHead className="hidden text-right sm:table-cell">Unit price</TableHead>
               <TableHead className="text-right">Expected</TableHead>
               <TableHead className="text-right">Counted</TableHead>
               <TableHead className="text-right">Variance</TableHead>
+              <TableHead className="hidden text-right md:table-cell">Variance value</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {visible.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="py-10 text-center text-sm text-[#22264B]/50">
+                <TableCell colSpan={6} className="py-10 text-center text-sm text-[#22264B]/50">
                   No products match.
                 </TableCell>
               </TableRow>
             )}
             {visible.map((i) => {
-              const entered = entries[i.id];
-              const shownVariance =
-                entered !== undefined && entered !== "" && Number.isFinite(Number(entered))
-                  ? Number(entered) - i.expectedQty
-                  : i.variance;
+              const price = priceOf(i);
+              const counted = effectiveCounted(i);
+              const shownVariance = counted !== null ? counted - i.expectedQty : null;
+              const shownValue = shownVariance !== null ? shownVariance * price : null;
               return (
                 <TableRow key={i.id}>
-                  <TableCell>
+                  <TableCell className="max-w-[160px] sm:max-w-none">
                     <span className="font-semibold text-[#22264B]">{i.productName}</span>
-                    <span className="block text-xs text-[#22264B]/45">{i.sku} · {i.packDescription}</span>
+                    <span className="block truncate text-xs text-[#22264B]/45">
+                      {i.sku} · {i.packDescription}
+                      <span className="sm:hidden"> · {formatMoney(price)}</span>
+                    </span>
+                    {shownValue !== null && shownValue !== 0 && (
+                      <span className={`block text-xs font-bold md:hidden ${shownValue > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        {shownValue > 0 ? "+" : "−"}{formatMoney(Math.abs(shownValue))}
+                      </span>
+                    )}
                   </TableCell>
+                  <TableCell className="hidden text-right text-sm text-[#22264B]/70 sm:table-cell">{formatMoney(price)}</TableCell>
                   <TableCell className="text-right text-sm">{formatQty(i.expectedQty)}</TableCell>
-                  <TableCell className="w-40">
+                  <TableCell className="w-28 sm:w-40">
                     {editable ? (
                       <Input
                         type="number"
@@ -218,7 +293,7 @@ export default function StockCountDetail() {
                         step="any"
                         value={valueFor(i.id, i.countedQty)}
                         onChange={(e) => setEntries((prev) => ({ ...prev, [i.id]: e.target.value }))}
-                        className="ml-auto w-28 text-right"
+                        className="ml-auto w-20 text-right sm:w-28"
                         placeholder="—"
                       />
                     ) : (
@@ -238,12 +313,110 @@ export default function StockCountDetail() {
                   >
                     {shownVariance == null ? "—" : `${shownVariance > 0 ? "+" : ""}${formatQty(shownVariance)}`}
                   </TableCell>
+                  <TableCell
+                    className={`hidden text-right font-bold md:table-cell ${
+                      shownValue == null || shownValue === 0
+                        ? "text-[#22264B]/40"
+                        : shownValue > 0
+                          ? "text-emerald-600"
+                          : "text-red-600"
+                    }`}
+                  >
+                    {shownValue == null ? "—" : `${shownValue > 0 ? "+" : "−"}${formatMoney(Math.abs(shownValue))}`}
+                  </TableCell>
                 </TableRow>
               );
             })}
           </TableBody>
         </Table>
       </div>
+
+      {/* ---- printable sheet ---- */}
+      <div className="hidden print:block">
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h1 className="text-lg font-black">Yabuz Oil and Gas Ltd</h1>
+            <p className="text-sm font-bold">Stock count sheet — {data.reference} ({data.status.replace("_", " ")})</p>
+            <p className="text-xs text-gray-500">
+              Started {formatDateTime(data.startedAt)} by {data.startedByName ?? "—"}
+              {data.completedAt ? ` · completed ${formatDateTime(data.completedAt)}` : ""}
+            </p>
+            {data.notes && <p className="text-xs text-gray-500">Notes: {data.notes}</p>}
+          </div>
+          <p className="text-xs text-gray-500">Printed {formatDateTime(new Date().toISOString())} by {user?.fullName ?? ""}</p>
+        </div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <thead>
+            <tr>
+              {["Product", "Unit price (₦)", "Expected", "Counted", "Variance", "Expected value (₦)", "Counted value (₦)", "Variance value (₦)"].map((h) => (
+                <th key={h} style={{ borderBottom: "2px solid #22264B", textAlign: "left", padding: "4px 6px" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map((i) => {
+              const price = priceOf(i);
+              const v = i.variance;
+              return (
+                <tr key={i.id}>
+                  <td style={{ borderBottom: "1px solid #ddd", padding: "3px 6px" }}>
+                    {i.productName} <span style={{ color: "#777" }}>({i.sku})</span>
+                  </td>
+                  <td style={{ borderBottom: "1px solid #ddd", padding: "3px 6px", textAlign: "right" }}>
+                    {price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ borderBottom: "1px solid #ddd", padding: "3px 6px", textAlign: "right" }}>{i.expectedQty}</td>
+                  <td style={{ borderBottom: "1px solid #ddd", padding: "3px 6px", textAlign: "right" }}>{i.countedQty ?? "—"}</td>
+                  <td style={{ borderBottom: "1px solid #ddd", padding: "3px 6px", textAlign: "right", color: v == null || v === 0 ? "#777" : v > 0 ? "green" : "red" }}>
+                    {v == null ? "—" : `${v > 0 ? "+" : ""}${v}`}
+                  </td>
+                  <td style={{ borderBottom: "1px solid #ddd", padding: "3px 6px", textAlign: "right" }}>
+                    {(i.expectedQty * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ borderBottom: "1px solid #ddd", padding: "3px 6px", textAlign: "right" }}>
+                    {i.countedQty != null ? (i.countedQty * price).toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"}
+                  </td>
+                  <td style={{ borderBottom: "1px solid #ddd", padding: "3px 6px", textAlign: "right", fontWeight: 700, color: v == null || v === 0 ? "#777" : v > 0 ? "green" : "red" }}>
+                    {v == null ? "—" : `${v > 0 ? "+" : "−"}${Math.abs(v * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={5} style={{ borderTop: "2px solid #22264B", padding: "4px 6px", fontWeight: 800 }}>TOTALS</td>
+              <td style={{ borderTop: "2px solid #22264B", padding: "4px 6px", textAlign: "right", fontWeight: 800 }}>
+                {totals.expectedValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </td>
+              <td style={{ borderTop: "2px solid #22264B", padding: "4px 6px", textAlign: "right", fontWeight: 800 }}>
+                {totals.countedValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </td>
+              <td style={{ borderTop: "2px solid #22264B", padding: "4px 6px", textAlign: "right", fontWeight: 800 }}>
+                {totals.varianceValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={7} style={{ padding: "3px 6px", color: "red", fontWeight: 700 }}>Shortage value (chargeable)</td>
+              <td style={{ padding: "3px 6px", textAlign: "right", color: "red", fontWeight: 700 }}>
+                {totals.shortageValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={7} style={{ padding: "3px 6px", color: "green", fontWeight: 700 }}>Surplus value</td>
+              <td style={{ padding: "3px 6px", textAlign: "right", color: "green", fontWeight: 700 }}>
+                {totals.surplusValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+        <div style={{ marginTop: 24, display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555" }}>
+          <span>Counted by: ____________________</span>
+          <span>Verified by: ____________________</span>
+          <span>Approved by: ____________________</span>
+        </div>
+      </div>
+      <style>{`@media print { body { background: white; } @page { margin: 12mm; } }`}</style>
 
       <AlertDialog open={confirmComplete} onOpenChange={setConfirmComplete}>
         <AlertDialogContent>
