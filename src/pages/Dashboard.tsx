@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
   AlertTriangle,
@@ -21,6 +22,16 @@ import { cn } from "@/lib/utils";
 export default function Dashboard() {
   const { user } = useAuth();
   const stats = trpc.dashboard.stats.useQuery();
+  const bannerQuery = trpc.settings.bannerImages.useQuery();
+  const images = bannerQuery.data ?? [];
+  const [slide, setSlide] = useState(0);
+
+  // Auto-rotate the banner background every 6 seconds.
+  useEffect(() => {
+    if (images.length < 2) return;
+    const t = setInterval(() => setSlide((s) => (s + 1) % images.length), 6000);
+    return () => clearInterval(t);
+  }, [images.length]);
 
   const canSeeCost = stats.data ? stats.data.costValue !== null : true;
 
@@ -79,18 +90,50 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Greeting */}
-      <div className="rounded-2xl bg-[#22264B] px-6 py-6 text-white sm:px-8">
-        <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#F7A026]">
-          Yabuz Oil & Gas Ltd
-        </p>
-        <h2 className="mt-1.5 text-2xl font-black tracking-tight sm:text-[28px]">
-          Welcome back, {user?.fullName.split(" ")[0]}.
-        </h2>
-        <p className="mt-1.5 max-w-lg text-sm text-[#D7C6AD]/75">
-          Here's the state of the business — stock, money, customers and anything waiting
-          for approval.
-        </p>
+      {/* Greeting — rotating background images behind frosted glass */}
+      <div className="relative overflow-hidden rounded-2xl bg-[#22264B] text-white">
+        {/* background slides */}
+        {images.map((src, i) => (
+          <img
+            key={src}
+            src={src}
+            alt=""
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-[1600ms] ease-in-out",
+              i === slide % Math.max(images.length, 1) ? "opacity-100" : "opacity-0",
+            )}
+          />
+        ))}
+        {/* frosted glass overlay — keeps the text readable while the images show through */}
+        <div className="absolute inset-0 bg-[#22264B]/55 backdrop-blur-[2px]" />
+        <div className="relative px-6 py-6 sm:px-8">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#F7A026]">
+            Yabuz Oil & Gas Ltd
+          </p>
+          <h2 className="mt-1.5 text-2xl font-black tracking-tight drop-shadow-sm sm:text-[28px]">
+            Welcome back, {user?.fullName.split(" ")[0]}.
+          </h2>
+          <p className="mt-1.5 max-w-lg text-sm text-white/75">
+            Here's the state of the business — stock, money, customers and anything waiting
+            for approval.
+          </p>
+          {images.length > 1 && (
+            <div className="mt-4 flex gap-1.5">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSlide(i)}
+                  aria-label={`Slide ${i + 1}`}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all duration-500",
+                    i === slide % images.length ? "w-6 bg-[#F7A026]" : "w-1.5 bg-white/40 hover:bg-white/70",
+                  )}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -114,7 +157,7 @@ export default function Dashboard() {
                 {c.value}
               </p>
             )}
-            <p className="mt-1 text-xs text-[#22264B]/50">{c.sub ?? " "}</p>
+            <p className="mt-1 text-xs text-[#22264B]/50">{c.sub ?? " "}</p>
           </Link>
         ))}
       </div>
