@@ -152,12 +152,11 @@ export function AccountActionDialog({ mode, customer, onClose }: Props) {
   const pending = deposit.isPending || refund.isPending || setLimit.isPending || adjust.isPending;
   const amountNum = Number(amount);
   const amountValid = Number.isFinite(amountNum) && amountNum > 0;
-  const proofOk = method === "CASH" || proof !== null;
-
+  // Proof is optional for every method.
   const valid = (() => {
     if (!mode || !customer) return false;
-    if (mode === "DEPOSIT") return amountValid && proofOk;
-    if (mode === "REFUND") return amountValid && proofOk && reason.trim().length >= 3;
+    if (mode === "DEPOSIT") return amountValid;
+    if (mode === "REFUND") return amountValid && reason.trim().length >= 3;
     if (mode === "LIMIT") return Number.isFinite(amountNum) && amountNum >= 0 && reason.trim().length >= 3;
     return amountValid && reason.trim().length >= 3;
   })();
@@ -283,8 +282,8 @@ export function AccountActionDialog({ mode, customer, onClose }: Props) {
 
           {isMoneyMode && (
             <div className="space-y-1.5">
-              <Label>Proof of {mode === "DEPOSIT" ? "payment" : "payout"}</Label>
-              <ProofUpload value={proof} onChange={(v) => setProof(v)} required={method !== "CASH"} />
+              <Label>Proof of {mode === "DEPOSIT" ? "payment" : "payout"} (optional)</Label>
+              <ProofUpload value={proof} onChange={(v) => setProof(v)} />
             </div>
           )}
 
