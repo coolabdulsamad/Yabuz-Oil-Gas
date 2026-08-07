@@ -5,7 +5,7 @@ import { createRouter } from "../middleware";
 import { permissionProcedure } from "../trpc";
 import { getDb } from "../queries/connection";
 import { approvalRequests, approvalRequestSteps, expenseCategories, expenses, users } from "@db/schema";
-import { EXPENSE_STATUSES } from "@contracts/constants";
+import { EXPENSE_STATUSES, MONEY_METHODS } from "@contracts/constants";
 import { logAudit, requestMeta } from "../services/audit.service";
 import { getFlowSteps, submitApproval } from "../services/approvals.service";
 
@@ -20,6 +20,7 @@ const expenseInput = z.object({
   amount: z.number().positive("Amount must be greater than zero"),
   description: z.string().trim().min(3, "Describe the expense").max(2000),
   vendor: z.string().trim().max(160).optional(),
+  paymentMethod: z.enum(MONEY_METHODS).default("CASH"),
   expenseDate: z.string().min(8, "Pick the expense date"),
   receiptUrl: z.string().url().max(500).optional(),
   receiptPublicId: z.string().max(255).optional(),
@@ -135,6 +136,7 @@ export const expensesRouter = createRouter({
             amount: input.amount,
             description: input.description,
             vendor: input.vendor || null,
+            paymentMethod: input.paymentMethod,
             expenseDate: date,
             receiptUrl: input.receiptUrl ?? null,
             receiptPublicId: input.receiptPublicId ?? null,
