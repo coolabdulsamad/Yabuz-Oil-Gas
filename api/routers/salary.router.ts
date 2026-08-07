@@ -317,6 +317,7 @@ export const salaryRouter = createRouter({
             amount: pay.netPay,
             description: `Salary ${monthLabel(pay.periodYear, pay.periodMonth)} — ${staff?.fullName ?? `#${pay.userId}`} (${pay.reference})${pay.loanDeduction > 0 ? ` · incl. ₦${pay.loanDeduction.toLocaleString()} loan deduction` : ""}`,
             vendor: staff?.fullName ?? null,
+            paymentMethod: input.paymentMethod,
             expenseDate: new Date(),
             status: "APPROVED",
             createdBy: ctx.user.id,
