@@ -100,6 +100,21 @@ export const settingsRouter = createRouter({
     };
   }),
 
+  /** Dashboard greeting-banner images (any staff can read — it's display content). */
+  bannerImages: authedProcedure.query(async () => {
+    const db = getDb();
+    const [row] = await db.select().from(settings).where(eq(settings.key, "dashboard.banner_images")).limit(1);
+    const fallback = ["/banner/oil-1.jpg", "/banner/oil-2.jpg", "/banner/oil-3.jpg"];
+    if (!row?.value) return fallback;
+    try {
+      const list = JSON.parse(row.value) as unknown;
+      const urls = Array.isArray(list) ? list.filter((x): x is string => typeof x === "string" && x.length > 4) : [];
+      return urls.length > 0 ? urls : fallback;
+    } catch {
+      return fallback;
+    }
+  }),
+
   /** Update a batch of settings. Every key is checked against its group's permission. */
   update: authedProcedure
     .input(z.object({ values: z.record(z.string(), z.unknown()) }))
