@@ -53,6 +53,29 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const PAYMENT_STATUSES = ["PENDING_APPROVAL", "CONFIRMED", "REJECTED"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
+/* --------------------------- MONEY MOVEMENTS --------------------------- */
+
+/** Real-money methods (excludes DEPOSIT_BALANCE — wallet moves are not new money). */
+export const MONEY_METHODS = ["CASH", "BANK_TRANSFER", "POS", "CHEQUE"] as const;
+export type MoneyMethod = (typeof MONEY_METHODS)[number];
+
+export const MONEY_DIRECTIONS = ["IN", "OUT"] as const;
+export type MoneyDirection = (typeof MONEY_DIRECTIONS)[number];
+
+/** Sources shown on the money movements page / report. */
+export const MONEY_SOURCES = [
+  "SALE_PAYMENT",
+  "CREDIT_PAYMENT",
+  "ADVANCE_DEPOSIT",
+  "OTHER_IN",
+  "EXPENSE",
+  "SALARY",
+  "LOAN",
+  "DEPOSIT_REFUND",
+  "OTHER_OUT",
+] as const;
+export type MoneySource = (typeof MONEY_SOURCES)[number];
+
 /* ------------------------------ CUSTOMER LEDGER ------------------------------ */
 export const CUSTOMER_TRANSACTION_TYPES = [
   "SALE_DEBIT",      // sale on credit → outstanding up
