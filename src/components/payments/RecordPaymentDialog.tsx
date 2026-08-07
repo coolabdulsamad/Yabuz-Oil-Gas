@@ -26,7 +26,7 @@ import {
 
 /**
  * YABUZ OIL & GAS — record a payment (any of the four types).
- * Proofs are mandatory for non-cash methods; overpayment on a sale flows
+ * Proof upload is optional for every method; overpayment on a sale flows
  * into the customer's deposit wallet at confirmation.
  */
 
@@ -121,10 +121,7 @@ export function RecordPaymentDialog({ open, onClose }: { open: boolean; onClose:
       toast.error("Pick a customer.");
       return;
     }
-    if (method !== "CASH" && !proof) {
-      toast.error("Attach a payment proof — required for non-cash payments.");
-      return;
-    }
+    // Proof is optional for all methods.
     createMutation.mutate({
       paymentType,
       saleId: paymentType === "SALE_PAYMENT" ? Number(saleId) : undefined,
@@ -249,8 +246,8 @@ export function RecordPaymentDialog({ open, onClose }: { open: boolean; onClose:
           )}
 
           <div>
-            <Label className="mb-1.5 block">Proof of payment</Label>
-            <ProofUpload value={proof} onChange={(v) => setProof(v)} required={method !== "CASH"} />
+            <Label className="mb-1.5 block">Proof of payment (optional)</Label>
+            <ProofUpload value={proof} onChange={(v) => setProof(v)} />
           </div>
 
           <div>
