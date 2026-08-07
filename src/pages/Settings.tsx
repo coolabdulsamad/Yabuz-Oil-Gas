@@ -1,15 +1,18 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   Bell,
   Boxes,
   Building2,
   Cloud,
+  Images,
+  ImagePlus,
   Loader2,
   MessageSquare,
   Receipt,
   Save,
   Sparkles,
+  Trash2,
   Volume2,
   VolumeX,
   Workflow,
@@ -18,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { soundsEnabled, setSoundsEnabled } from "@/lib/sounds";
+import { cloudinaryThumb, uploadToCloudinary } from "@/lib/cloudinary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,6 +150,9 @@ export default function Settings() {
               <t.icon className="size-3.5" /> {t.title}
             </TabsTrigger>
           ))}
+          <TabsTrigger value="dashboard" className="gap-1.5 text-xs font-bold">
+            <Images className="size-3.5" /> Dashboard
+          </TabsTrigger>
           <TabsTrigger value="workflow" className="gap-1.5 text-xs font-bold">
             <Workflow className="size-3.5" /> Workflow
           </TabsTrigger>
@@ -159,6 +166,9 @@ export default function Settings() {
             <SettingsTab def={t} rows={rows} />
           </TabsContent>
         ))}
+        <TabsContent value="dashboard">
+          <DashboardBannerTab />
+        </TabsContent>
         <TabsContent value="workflow">
           <WorkflowTab />
         </TabsContent>
@@ -293,6 +303,116 @@ function SettingsTab({ def, rows }: { def: TabDef; rows: SettingRow[] }) {
 }
 
 /* --------------------------------- Workflow tab -------------------------------- */
+
+/* --------------------------- Dashboard banner images --------------------------- */
+
+function DashboardBannerTab() {
+  const utils = trpc.useUtils();
+  const imagesQuery = trpc.settings.bannerImages.useQuery();
+  const configQuery = trpc.settings.uploadConfig.useQuery();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [images, setImages] = useState<string[] | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Local edit copy; null = not yet edited (show server list).
+  const list = images ?? imagesQuery.data ?? [];
+  const dirty = images !== null;
+
+  const updateMutation = trpc.settings.update.useMutation({
+    onSuccess: () => {
+      toast.success("Banner images saved.");
+      setImages(null);
+      utils.settings.bannerImages.invalidate();
+      utils.settings.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleFile = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    const config = configQuery.data;
+    if (!config?.configured) {
+      toast.error("Cloudinary isn't configured yet — fill the Cloudinary tab first.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const up = await uploadToCloudinary(file, config);
+      setImages([...list, up.url]);
+      toast.success("Image uploaded — remember to save.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  };
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-[#22264B]/10 bg-white p-5">
+      <div>
+        <h3 className="text-sm font-extrabold text-[#22264B]">Dashboard greeting banner</h3>
+        <p className="mt-0.5 text-xs text-[#22264B]/55">
+          These images rotate behind the "Welcome back" banner on the dashboard (frosted-glass style).
+          Upload from your device — images go straight to Cloudinary. Wide landscape images look best.
+        </p>
+      </div>
+
+      <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files)} />
+
+      {imagesQuery.isLoading ? (
+        <Skeleton className="h-32 w-full" />
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {list.map((url, i) => (
+            <div key={url} className="group relative overflow-hidden rounded-xl border border-[#22264B]/10">
+              <img src={cloudinaryThumb(url, 400)} alt={`Banner ${i + 1}`} className="h-28 w-full object-cover" />
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
+                <span className="text-[10px] font-bold text-white">#{i + 1}</span>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="size-6 rounded-full"
+                  onClick={() => setImages(list.filter((_, x) => x !== i))}
+                >
+                  <Trash2 className="size-3" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileInput.current?.click()}
+            className="flex h-28 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#22264B]/25 text-sm text-[#22264B]/55 transition hover:border-[#F7A026] hover:text-[#22264B]"
+          >
+            {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
+            <span className="text-xs font-semibold">{uploading ? "Uploading…" : "Add image"}</span>
+          </button>
+        </div>
+      )}
+
+      {list.length === 0 && !imagesQuery.isLoading && (
+        <p className="text-xs text-amber-700">
+          No images — the built-in oil-themed defaults will show until you add your own.
+        </p>
+      )}
+
+      <div className="flex justify-end">
+        <Button
+          className="bg-[#22264B] hover:bg-[#22264B]/90"
+          disabled={!dirty || updateMutation.isPending}
+          onClick={() => updateMutation.mutate({ values: { "dashboard.banner_images": list } })}
+        >
+          {updateMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
+          {updateMutation.isPending ? "Saving…" : "Save banner images"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function WorkflowTab() {
   const flowsQuery = trpc.approvals.flows.useQuery();
