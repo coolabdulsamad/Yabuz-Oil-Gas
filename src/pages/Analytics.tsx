@@ -125,6 +125,7 @@ export default function Analytics() {
   const methodMix = trpc.analytics.paymentMethodMix.useQuery(range);
   const expenseMix = trpc.analytics.expenseMix.useQuery(range);
   const debtors = trpc.analytics.topDebtors.useQuery();
+  const moneyFlow = trpc.analytics.moneyFlow.useQuery(range);
 
   const cur = overview.data?.current;
   const prev = overview.data?.previous;
@@ -214,6 +215,59 @@ export default function Analytics() {
           </p>
           <p className="text-[11px] text-[#22264B]/50">of completed-sale value came back</p>
         </div>
+      </div>
+
+      {/* Money flow (real cash & bank) */}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+            <p className="text-[10px] font-bold tracking-[0.14em] text-emerald-700/70 uppercase">Money in</p>
+            <p className="mt-1 text-lg font-extrabold text-emerald-700">{formatMoney(moneyFlow.data?.summary.totalIn)}</p>
+            <p className="text-[11px] text-emerald-700/60">sales · credit repayments · deposits · other</p>
+          </div>
+          <div className="rounded-xl border border-red-200 bg-red-50/60 px-4 py-3">
+            <p className="text-[10px] font-bold tracking-[0.14em] text-red-700/70 uppercase">Money out</p>
+            <p className="mt-1 text-lg font-extrabold text-red-600">{formatMoney(moneyFlow.data?.summary.totalOut)}</p>
+            <p className="text-[11px] text-red-600/60">expenses · salaries · loans · refunds · other</p>
+          </div>
+          <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
+            <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Net money flow</p>
+            <p className={`mt-1 text-lg font-extrabold ${(moneyFlow.data?.summary.net ?? 0) >= 0 ? "text-[#22264B]" : "text-red-600"}`}>
+              {formatMoney(moneyFlow.data?.summary.net)}
+            </p>
+            <p className="text-[11px] text-[#22264B]/50">{moneyFlow.data?.summary.count ?? 0} real-money transactions</p>
+          </div>
+          <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
+            <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Method balances</p>
+            <div className="mt-1 space-y-0.5">
+              {(moneyFlow.data?.summary.methods ?? []).map((m) => (
+                <p key={m.method} className="flex justify-between text-[11px] text-[#22264B]/60">
+                  <span>{m.method === "BANK_TRANSFER" ? "Bank" : m.method === "CASH" ? "Cash" : m.method === "POS" ? "POS" : "Cheque"}</span>
+                  <span className={`font-bold ${m.balance >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatMoney(m.balance)}</span>
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+        <Panel title="Money flow trend" subtitle="Daily real money in vs out (cash, bank, POS, cheque — wallet & credit excluded)">
+          {moneyFlow.isLoading ? (
+            <Skeleton className="h-full w-full bg-[#22264B]/5" />
+          ) : !moneyFlow.data || moneyFlow.data.daily.length === 0 ? (
+            <EmptyChart text="No money movements in this window yet." />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={moneyFlow.data.daily} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#22264B10" />
+                <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#22264B80" }} tickFormatter={(d: string) => d.slice(5)} />
+                <YAxis tick={{ fontSize: 10, fill: "#22264B80" }} tickFormatter={moneyTick} width={56} />
+                <Tooltip formatter={(v: number) => formatMoney(v)} labelStyle={{ color: "#22264B" }} />
+                <Legend />
+                <Bar dataKey="in" name="Money in" fill="#059669" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="out" name="Money out" fill="#DC2626" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Panel>
       </div>
 
       {/* Trend */}
