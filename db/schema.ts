@@ -47,6 +47,8 @@ import {
   SALARY_PAYMENT_STATUSES,
   SALARY_PAYMENT_METHODS,
   LOAN_STATUSES,
+  MONEY_METHODS,
+  MONEY_DIRECTIONS,
 } from "@contracts/index";
 
 /* ======================================================================
@@ -426,6 +428,8 @@ export const stockCountItems = mysqlTable(
     expectedQty: decimal("expected_qty", { precision: 14, scale: 3, mode: "number" }).notNull(),
     countedQty: decimal("counted_qty", { precision: 14, scale: 3, mode: "number" }),
     variance: decimal("variance", { precision: 14, scale: 3, mode: "number" }),
+    /** Selling unit price snapshotted when the count started — values the variance. */
+    unitPrice: decimal("unit_price", { precision: 14, scale: 2, mode: "number" }),
     notes: varchar("notes", { length: 255 }),
   },
   (t) => [index("idx_count_items_count").on(t.countId)],
@@ -842,6 +846,8 @@ export const expenses = mysqlTable(
     amount: decimal("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
     description: text("description").notNull(),
     vendor: varchar("vendor", { length: 160 }),
+    /** How the money actually left (cash/bank/pos/cheque). Null on legacy rows = treated as cash. */
+    paymentMethod: mysqlEnum("payment_method", MONEY_METHODS),
     expenseDate: date("expense_date").notNull(),
     receiptUrl: varchar("receipt_url", { length: 500 }), // receipt proof
     receiptPublicId: varchar("receipt_public_id", { length: 255 }),
@@ -858,6 +864,37 @@ export const expenses = mysqlTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
   },
   (t) => [index("idx_expenses_status").on(t.status), index("idx_expenses_date").on(t.expenseDate)],
+);
+
+/* ===================== 9a. MANUAL MONEY MOVEMENTS ===================== */
+
+/**
+ * "Other" money in/out recorded directly on the Money page — anything real
+ * that isn't a sale payment, credit repayment, deposit, expense, salary or
+ * loan (e.g. owner capital in, bank charges, cash moved to the bank).
+ * Only actual cash/bank/pos/cheque money lives here.
+ */
+export const moneyMovements = mysqlTable(
+  "money_movements",
+  {
+    id: serial("id").primaryKey(),
+    reference: varchar("reference", { length: 30 }).notNull().unique(), // MM-000001
+    direction: mysqlEnum("direction", MONEY_DIRECTIONS).notNull(),
+    method: mysqlEnum("method", MONEY_METHODS).notNull(),
+    label: varchar("label", { length: 120 }).notNull(), // short category, e.g. "Owner capital"
+    amount: decimal("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+    description: text("description"),
+    movementDate: date("movement_date").notNull(),
+    createdBy: bigint("created_by", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => [
+    index("idx_money_movements_direction").on(t.direction),
+    index("idx_money_movements_date").on(t.movementDate),
+  ],
 );
 
 /* ===================== 9b. PAYROLL & STAFF LOANS ===================== */
@@ -1314,6 +1351,7 @@ export type SalaryPayment = typeof salaryPayments.$inferSelect;
 export type StaffLoan = typeof staffLoans.$inferSelect;
 export type StaffLoanRepayment = typeof staffLoanRepayments.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+export type MoneyMovement = typeof moneyMovements.$inferSelect;
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
 export type ApprovalFlow = typeof approvalFlows.$inferSelect;
