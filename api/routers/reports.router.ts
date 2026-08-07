@@ -21,6 +21,7 @@ import {
   users,
 } from "@db/schema";
 import { parsePaymentMode } from "../services/payments.service";
+import { listMoneyMovements, summarizeMovements } from "../services/money.service";
 
 /**
  * YABUZ OIL & GAS — reports router
@@ -711,4 +712,28 @@ export const reportsRouter = createRouter({
       },
     };
   }),
+
+  /* --------------------------- MONEY MOVEMENTS REPORT --------------------------- */
+
+  moneyMovementsReport: permissionProcedure("reports.view")
+    .input(rangeInput)
+    .query(async ({ input }) => {
+      const db = getDb();
+      const rows = await listMoneyMovements(db, {
+        dateFrom: input?.dateFrom,
+        dateTo: input?.dateTo,
+      });
+      const summary = summarizeMovements(rows);
+      // Daily net-flow series for the trend strip.
+      const byDay = new Map<string, { day: string; in: number; out: number }>();
+      for (const r of rows) {
+        const day = r.date.slice(0, 10);
+        const b = byDay.get(day) ?? { day, in: 0, out: 0 };
+        if (r.direction === "IN") b.in += r.amount;
+        else b.out += r.amount;
+        byDay.set(day, b);
+      }
+      const daily = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+      return { rows: rows.slice(0, 1000), summary, daily };
+    }),
 });
