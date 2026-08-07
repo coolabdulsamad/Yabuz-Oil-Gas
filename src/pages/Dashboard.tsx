@@ -107,7 +107,7 @@ export default function Dashboard() {
         ))}
         {/* frosted glass overlay — keeps the text readable while the images show through */}
         <div className="absolute inset-0 bg-[#22264B]/55 backdrop-blur-[2px]" />
-        <div className="relative px-6 py-6 sm:px-8">
+        <div className="relative flex min-h-[190px] flex-col justify-center px-6 py-6 sm:min-h-[230px] sm:px-8">
           <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#F7A026]">
             Yabuz Oil & Gas Ltd
           </p>
