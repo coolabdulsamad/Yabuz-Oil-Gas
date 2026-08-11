@@ -50,6 +50,8 @@ const saleBodyInput = z.object({
   items: z.array(lineInput).min(1, "Add at least one product."),
   saleDiscount: z.number().min(0).default(0),
   discountNote: z.string().trim().max(255).optional(),
+  saleAdvantage: z.number().min(0).default(0),
+  advantageNote: z.string().trim().max(255).optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -72,7 +74,7 @@ async function prepareSaleLines(
   db: Db,
   input: z.infer<typeof saleBodyInput>,
   has: (key: string) => boolean,
-): Promise<{ lines: PreparedLine[]; subtotal: number; discountTotal: number; grandTotal: number }> {
+): Promise<{ lines: PreparedLine[]; subtotal: number; discountTotal: number; advantageTotal: number; grandTotal: number }> {
   const ids = [...new Set(input.items.map((i) => i.productId))];
   const productRows = await db.select().from(products).where(inArray(products.id, ids));
   const byId = new Map(productRows.map((p) => [p.id, p]));
@@ -123,11 +125,12 @@ async function prepareSaleLines(
 
   const subtotal = Number(lines.reduce((s, l) => s + l.lineTotal, 0).toFixed(2));
   const discountTotal = Number((lines.reduce((s, l) => s + l.discountAmount, 0) + input.saleDiscount).toFixed(2));
-  const grandTotal = Number((subtotal - input.saleDiscount).toFixed(2));
+  const advantageTotal = Number(input.saleAdvantage.toFixed(2));
+  const grandTotal = Number((subtotal - input.saleDiscount + advantageTotal).toFixed(2));
   if (grandTotal <= 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "The sale total must be greater than zero." });
   }
-  return { lines, subtotal, discountTotal, grandTotal };
+  return { lines, subtotal, discountTotal, advantageTotal, grandTotal };
 }
 
 /** Customer + wallet validation for CREDIT / DEPOSIT modes. Returns the customer row (null for walk-in PAY_LATER). */
@@ -369,7 +372,7 @@ export const salesRouter = createRouter({
       if (input.action === "HOLD" && !has("sales.hold")) {
         throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to hold sales." });
       }
-      const { lines, subtotal, discountTotal, grandTotal } = await prepareSaleLines(db, input, has);
+      const { lines, subtotal, discountTotal, advantageTotal, grandTotal } = await prepareSaleLines(db, input, has);
       const customer = await validatePaymentMode(db, input, grandTotal, has);
       const productRows = await db
         .select({ id: products.id, name: products.name, currentStock: products.currentStock })
@@ -390,6 +393,8 @@ export const salesRouter = createRouter({
             subtotal,
             discountTotal,
             discountNote: input.discountNote || null,
+            advantageAmount: advantageTotal,
+            advantageNote: input.advantageNote || null,
             grandTotal,
             balanceDue: grandTotal,
             notes: stampedNotes,
@@ -444,7 +449,7 @@ export const salesRouter = createRouter({
       if (sale.status !== "DRAFT" && sale.status !== "ON_HOLD") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Only draft or held sales can be edited." });
       }
-      const { lines, subtotal, discountTotal, grandTotal } = await prepareSaleLines(db, input, has);
+      const { lines, subtotal, discountTotal, advantageTotal, grandTotal } = await prepareSaleLines(db, input, has);
       const customer = await validatePaymentMode(db, input, grandTotal, has);
       const before = {
         grandTotal: sale.grandTotal,
@@ -463,6 +468,8 @@ export const salesRouter = createRouter({
             subtotal,
             discountTotal,
             discountNote: input.discountNote || null,
+            advantageAmount: advantageTotal,
+            advantageNote: input.advantageNote || null,
             grandTotal,
             balanceDue: grandTotal,
             notes: stampedNotes,
@@ -498,7 +505,7 @@ export const salesRouter = createRouter({
       const mode = parsePaymentMode(sale.notes);
       await validatePaymentMode(
         db,
-        { customerId: sale.customerId ?? undefined, paymentMode: mode, items: [], saleDiscount: 0 },
+        { customerId: sale.customerId ?? undefined, paymentMode: mode, items: [], saleDiscount: 0, saleAdvantage: 0 },
         sale.grandTotal,
         (k) => ctx.permissions.has(k),
       );
