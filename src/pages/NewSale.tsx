@@ -74,6 +74,8 @@ export default function NewSale() {
   const [lines, setLines] = useState<SaleLine[]>([]);
   const [saleDiscount, setSaleDiscount] = useState("0");
   const [discountNote, setDiscountNote] = useState("");
+  const [saleAdvantage, setSaleAdvantage] = useState("0");
+  const [advantageNote, setAdvantageNote] = useState("");
   const [notes, setNotes] = useState("");
   const [loadedDraft, setLoadedDraft] = useState<number | null>(null);
 
@@ -97,6 +99,8 @@ export default function NewSale() {
       setPaymentMode(d.sale.paymentMode);
       setSaleDiscount(String(d.sale.discountTotal - d.items.reduce((s, i) => s + i.discountAmount, 0)));
       setDiscountNote(d.sale.discountNote ?? "");
+      setSaleAdvantage(String(d.sale.advantageAmount ?? 0));
+      setAdvantageNote(d.sale.advantageNote ?? "");
       setNotes(d.sale.notes?.replace(/\[mode:[A-Z_]+\]\s?/, "") ?? "");
       setLines(
         d.items.map((i) => {
@@ -176,7 +180,7 @@ export default function NewSale() {
   };
 
   const subtotal = lines.reduce((s, l) => s + Math.max(0, num(l.quantity) * num(l.unitPrice) - num(l.discountAmount)), 0);
-  const grandTotal = Math.max(0, subtotal - num(saleDiscount));
+  const grandTotal = Math.max(0, subtotal - num(saleDiscount) + num(saleAdvantage));
 
   const buildPayload = () => ({
     customerId: customerId ? Number(customerId) : undefined,
@@ -190,6 +194,8 @@ export default function NewSale() {
     })),
     saleDiscount: num(saleDiscount),
     discountNote: discountNote.trim() || undefined,
+    saleAdvantage: num(saleAdvantage),
+    advantageNote: advantageNote.trim() || undefined,
     notes: notes.trim() || undefined,
   });
 
@@ -501,6 +507,25 @@ export default function NewSale() {
                 value={discountNote}
                 onChange={(e) => setDiscountNote(e.target.value)}
                 placeholder="Discount reason…"
+                className="mt-2 h-8 text-xs"
+              />
+            )}
+            <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+              <span className="text-[#22264B]/60">Advantage (add-on)</span>
+              <Input
+                type="number"
+                min={0}
+                step="any"
+                value={saleAdvantage}
+                onChange={(e) => setSaleAdvantage(e.target.value)}
+                className="h-8 w-32 text-right"
+              />
+            </div>
+            {num(saleAdvantage) > 0 && (
+              <Input
+                value={advantageNote}
+                onChange={(e) => setAdvantageNote(e.target.value)}
+                placeholder="Advantage reason (e.g. special customer)…"
                 className="mt-2 h-8 text-xs"
               />
             )}

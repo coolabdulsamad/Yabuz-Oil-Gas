@@ -292,6 +292,14 @@ export default function SaleDetail() {
               <span className="font-semibold text-red-600">−{formatMoney(sale.discountTotal)}</span>
             </div>
           )}
+          {sale.advantageAmount > 0 && (
+            <div className="flex justify-between">
+              <span className="text-[#22264B]/60">
+                Advantage{sale.advantageNote ? ` (${sale.advantageNote})` : ""}
+              </span>
+              <span className="font-semibold text-emerald-700">+{formatMoney(sale.advantageAmount)}</span>
+            </div>
+          )}
           <div className="flex justify-between border-t border-[#22264B]/10 pt-2">
             <span className="font-bold text-[#22264B]">Grand total</span>
             <span className="text-base font-black text-[#F7A026]">{formatMoney(sale.grandTotal)}</span>
