@@ -90,6 +90,7 @@ export const reportsRouter = createRouter({
           itemCount: sales.itemCount,
           subtotal: sales.subtotal,
           discountTotal: sales.discountTotal,
+          advantageAmount: sales.advantageAmount,
           grandTotal: sales.grandTotal,
           amountPaid: sales.amountPaid,
           balanceDue: sales.balanceDue,
@@ -114,6 +115,7 @@ export const reportsRouter = createRouter({
         count: items.length,
         subtotal: items.reduce((s, r) => s + Number(r.subtotal), 0),
         discount: items.reduce((s, r) => s + Number(r.discountTotal), 0),
+        advantage: items.reduce((s, r) => s + Number(r.advantageAmount), 0),
         revenue: items.reduce((s, r) => s + Number(r.grandTotal), 0),
         collected: items.reduce((s, r) => s + Number(r.amountPaid), 0),
         outstanding: items.reduce((s, r) => s + Math.max(0, Number(r.balanceDue)), 0),
@@ -192,6 +194,7 @@ export const reportsRouter = createRouter({
           collected: sql<number>`COALESCE(SUM(${sales.amountPaid}), 0)`,
           outstanding: sql<number>`COALESCE(SUM(GREATEST(${sales.balanceDue}, 0)), 0)`,
           discount: sql<number>`COALESCE(SUM(${sales.discountTotal}), 0)`,
+          advantage: sql<number>`COALESCE(SUM(${sales.advantageAmount}), 0)`,
         })
         .from(sales)
         .leftJoin(users, eq(sales.salesRepId, users.id))
@@ -206,6 +209,7 @@ export const reportsRouter = createRouter({
         collected: Number(r.collected),
         outstanding: Number(r.outstanding),
         discount: Number(r.discount),
+        advantage: Number(r.advantage),
       }));
       return {
         items,
@@ -481,6 +485,7 @@ export const reportsRouter = createRouter({
         .select({
           revenue: sql<number>`COALESCE(SUM(${sales.grandTotal}), 0)`,
           discount: sql<number>`COALESCE(SUM(${sales.discountTotal}), 0)`,
+          advantage: sql<number>`COALESCE(SUM(${sales.advantageAmount}), 0)`,
           salesCount: sql<number>`COUNT(*)`,
           collected: sql<number>`COALESCE(SUM(${sales.amountPaid}), 0)`,
         })
@@ -510,6 +515,7 @@ export const reportsRouter = createRouter({
       return {
         revenue,
         discount: Number(rev?.discount ?? 0),
+        advantage: Number(rev?.advantage ?? 0),
         salesCount: Number(rev?.salesCount ?? 0),
         collected: Number(rev?.collected ?? 0),
         cogs: cost,
