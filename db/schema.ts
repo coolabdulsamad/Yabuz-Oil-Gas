@@ -546,6 +546,11 @@ export const sales = mysqlTable(
       .notNull()
       .default(0),
     discountNote: varchar("discount_note", { length: 255 }),
+    /** Extra amount added on top for select customers (opposite of a discount). */
+    advantageAmount: decimal("advantage_amount", { precision: 14, scale: 2, mode: "number" })
+      .notNull()
+      .default(0),
+    advantageNote: varchar("advantage_note", { length: 255 }),
     grandTotal: decimal("grand_total", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
     /** Total confirmed payments applied to this sale. */
     amountPaid: decimal("amount_paid", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
