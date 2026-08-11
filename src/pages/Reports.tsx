@@ -257,6 +257,7 @@ function SalesReport({ range }: { range: Range }) {
     { header: "Mode", value: (r) => MODE_LABELS[r.paymentMode] ?? r.paymentMode },
     { header: "Subtotal", value: (r) => r.subtotal },
     { header: "Discount", value: (r) => r.discountTotal },
+    { header: "Advantage", value: (r) => r.advantageAmount },
     { header: "Grand total", value: (r) => r.grandTotal },
     { header: "Paid", value: (r) => r.amountPaid },
     { header: "Balance", value: (r) => r.balanceDue },
@@ -282,10 +283,11 @@ function SalesReport({ range }: { range: Range }) {
         <LoadingGrid />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
             <Stat label="Sales" value={String(q.data?.totals.count ?? 0)} />
             <Stat label="Revenue" value={formatMoney(q.data?.totals.revenue)} />
             <Stat label="Discounts" value={formatMoney(q.data?.totals.discount)} />
+            <Stat label="Advantages" value={formatMoney(q.data?.totals.advantage)} />
             <Stat label="Collected" value={formatMoney(q.data?.totals.collected)} />
             <Stat label="Outstanding" value={formatMoney(q.data?.totals.outstanding)} />
           </div>
@@ -386,6 +388,7 @@ function RepSalesReport({ range }: { range: Range }) {
     { header: "Collected", value: (r) => r.collected },
     { header: "Outstanding", value: (r) => r.outstanding },
     { header: "Discounts given", value: (r) => r.discount },
+    { header: "Advantages added", value: (r) => r.advantage },
   ];
 
   return (
@@ -403,9 +406,9 @@ function RepSalesReport({ range }: { range: Range }) {
             <Stat label="Collected" value={formatMoney(q.data?.totals.collected)} />
             <Stat label="Outstanding" value={formatMoney(q.data?.totals.outstanding)} />
           </div>
-          <ReportTable head={["Sales rep", "Sales", "Revenue", "Collected", "Outstanding", "Discounts"]}>
+          <ReportTable head={["Sales rep", "Sales", "Revenue", "Collected", "Outstanding", "Discounts", "Advantages"]}>
             {!rows || rows.length === 0 ? (
-              <EmptyRow cols={6} text="No completed sales in this range." />
+              <EmptyRow cols={7} text="No completed sales in this range." />
             ) : (
               rows.map((r) => (
                 <TableRow key={r.repId}>
@@ -417,6 +420,7 @@ function RepSalesReport({ range }: { range: Range }) {
                     {formatMoney(r.outstanding)}
                   </TableCell>
                   <TableCell className="text-xs">{formatMoney(r.discount)}</TableCell>
+                  <TableCell className="text-xs">{formatMoney(r.advantage)}</TableCell>
                 </TableRow>
               ))
             )}
@@ -633,7 +637,7 @@ function ProfitReport({ range }: { range: Range }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Completed sales" value={String(d?.salesCount ?? 0)} />
-        <Stat label="Revenue" value={formatMoney(d?.revenue)} hint={`Discounts given: ${formatMoney(d?.discount)}`} />
+        <Stat label="Revenue" value={formatMoney(d?.revenue)} hint={`Discounts: ${formatMoney(d?.discount)} · Advantages: ${formatMoney(d?.advantage)}`} />
         <Stat label="Gross margin" value={formatMoney(d?.grossMargin)} hint={`${pct(d?.grossMarginPct)} of revenue`} />
         <Stat label="Net margin" value={formatMoney(d?.netMargin)} hint={`${pct(d?.netMarginPct)} of revenue`} />
       </div>
