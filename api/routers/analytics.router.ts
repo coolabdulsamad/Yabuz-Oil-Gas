@@ -59,6 +59,7 @@ export const analyticsRouter = createRouter({
             revenue: sql<number>`COALESCE(SUM(${sales.grandTotal}), 0)`,
             collected: sql<number>`COALESCE(SUM(${sales.amountPaid}), 0)`,
             salesCount: sql<number>`COUNT(*)`,
+            advantage: sql<number>`COALESCE(SUM(${sales.advantageAmount}), 0)`,
           })
           .from(sales)
           .where(and(eq(sales.status, "COMPLETED"), gte(sales.createdAt, f), lte(sales.createdAt, t)));
@@ -96,6 +97,7 @@ export const analyticsRouter = createRouter({
         const revenue = Number(rev?.revenue ?? 0);
         return {
           revenue,
+          advantage: Number(rev?.advantage ?? 0),
           collected: Number(pay?.amount ?? 0),
           cogs: Number(cogs?.cost ?? 0),
           grossMargin: revenue - Number(cogs?.cost ?? 0),

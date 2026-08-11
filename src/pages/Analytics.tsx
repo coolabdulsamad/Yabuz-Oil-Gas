@@ -172,7 +172,7 @@ export default function Analytics() {
       )}
 
       {/* Secondary KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
           <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Completed sales</p>
           <p className="mt-1 text-lg font-extrabold text-[#22264B]">{cur?.salesCount ?? 0}</p>
@@ -180,6 +180,10 @@ export default function Analytics() {
         <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
           <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Avg sale value</p>
           <p className="mt-1 text-lg font-extrabold text-[#22264B]">{formatMoney(cur?.avgSale)}</p>
+        </div>
+        <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
+          <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Advantages added</p>
+          <p className="mt-1 text-lg font-extrabold text-emerald-700">{formatMoney(cur?.advantage)}</p>
         </div>
         <div className="rounded-xl border border-[#22264B]/10 bg-white px-4 py-3">
           <p className="text-[10px] font-bold tracking-[0.14em] text-[#22264B]/45 uppercase">Customers owe us</p>
